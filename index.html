@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>¡Estás invitado! Primer cumpleaños de JAHSEN</title>
+<meta name="description" content="Sábado 28 de noviembre, 10:00 a. m. Toca para abrir la invitación 🎉">
+<meta name="theme-color" content="#FDF2DB">
+<meta property="og:type" content="website">
+<meta property="og:title" content="¡Estás invitado! Primer cumpleaños de JAHSEN">
+<meta property="og:description" content="Sábado 28 de noviembre, 10:00 a. m. Toca para abrir la invitación 🎉">
+<meta property="og:url" content="https://luisfc-collab.github.io/jahsen-invitacion/">
+<meta property="og:image" content="https://luisfc-collab.github.io/jahsen-invitacion/og.jpg">
+<meta property="og:image:secure_url" content="https://luisfc-collab.github.io/jahsen-invitacion/og.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Invitación Looney Tunes del primer cumpleaños de JAHSEN">
+<meta property="og:locale" content="es_PE">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="img/p1_vacio.webp" as="image">
+<link rel="preload" href="img/sobre.webp" as="image">
+<link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="scroller" class="locked">
+
+  <!-- 1 · Portada del sobre -->
+  <section class="sec" id="s1" data-sound="p1_piolin" data-auto="0">
+    <div class="page">
+      <img class="bg" src="img/p1_vacio.webp" alt="¡Estás invitado!" width="1080" height="1920">
+      <img id="sobre" class="el" src="img/sobre.webp" alt="Sobre de la invitación" style="--x:0;--y:730;--w:855" width="855" height="733">
+      <img class="el char" data-src="img/s1_piolin.webp" alt="Piolín" style="--x:650;--y:695;--w:406" width="406" height="726">
+      <button class="hot" id="abrirSobre" aria-label="Abrir el sobre" style="--x:40;--y:790;--w:600;--h:620;border-radius:12%"></button>
+      <button class="hot pill pulse" id="abrirBtn" aria-label="Toca para abrir" style="--x:162;--y:1547;--w:756;--h:163"></button>
+      <div id="flash"></div>
+    </div>
+  </section>
+
+  <!-- 2 · Mi cumpleaños 1 · Bugs -->
+  <section class="sec" id="s2" data-sound="p2_bugs" data-auto="1">
+    <div class="page">
+      <img class="bg" data-src="img/p2.webp" alt="Mi cumpleaños número 1 · JAHSEN" width="1080" height="1920">
+      <img class="el char" data-src="img/s2_bugs_bucle.webp" alt="Bugs Bunny" style="--x:296;--y:896;--w:784" width="784" height="480">
+      <button class="hot pill" id="escucharBtn" aria-label="Toca para escuchar" style="--x:231;--y:1707;--w:624;--h:130"></button>
+    </div>
+  </section>
+
+  <!-- 3 · Fecha · Lucas -->
+  <section class="sec" id="s3" data-sound="p3_lucas" data-auto="1">
+    <div class="page">
+      <img class="bg" data-src="img/p3.webp" alt="El gran día será el sábado 28 de noviembre a las 10:00 a. m." width="1080" height="1920">
+      <img class="el char" data-src="img/s3_lucas.webp" alt="Pato Lucas" style="--x:658;--y:1260;--w:392" width="420" height="686">
+    </div>
+  </section>
+
+  <!-- 4 · Contador · Correcaminos -->
+  <section class="sec" id="s4" data-sound="p4_correcaminos" data-auto="1">
+    <div class="page">
+      <img class="bg" data-src="img/p4.webp" alt="¿Cuánto falta?" width="1080" height="1920">
+      <div id="countdown" class="el" style="--x:150;--y:700;--w:780;--h:630">
+        <div class="cd-title" id="cdTitle">¡Falta poco para la fiesta!</div>
+        <div class="cd-row" id="cdRow">
+          <div class="cd-box"><b id="cdD">--</b><small>días</small></div>
+          <div class="cd-box"><b id="cdH">--</b><small>horas</small></div>
+          <div class="cd-box"><b id="cdM">--</b><small>minutos</small></div>
+          <div class="cd-box"><b id="cdS">--</b><small>segundos</small></div>
+        </div>
+      </div>
+      <img class="el char" data-src="img/s4_persecucion.webp" alt="El Coyote persigue al Correcaminos" style="--x:0;--y:1344;--w:1080" width="720" height="384">
+      <canvas class="confetti" id="confetti4"></canvas>
+    </div>
+  </section>
+
+  <!-- 5 · Dirección · Silvestre -->
+  <section class="sec" id="s5" data-sound="p5_silvestre" data-auto="1">
+    <div class="page">
+      <img class="bg" data-src="img/p5.webp" alt="Dirección: ¡Corre como el Correcaminos! Presiona para ubicarnos" width="1080" height="1920">
+      <img class="el char" data-src="img/s5_silvestre.webp" alt="Silvestre" style="--x:660;--y:1230;--w:420" width="420" height="634">
+      <a class="hot pill" id="mapaBtn" aria-label="Síguenos en el mapa" href="https://maps.google.com/maps?q=-7.2049969%2C-78.4332468&amp;z=17&amp;hl=es" target="_blank" rel="noopener" style="--x:95;--y:1290;--w:470;--h:160"></a>
+    </div>
+  </section>
+
+  <!-- 6 · Confirmación · Porky -->
+  <section class="sec" id="s6" data-sound="p6_porky" data-auto="1">
+    <div class="page">
+      <img class="bg" data-src="img/p6.webp" alt="Confirmación: ¡Me encantaría que formes parte de este día tan especial!" width="1080" height="1920">
+      <img class="el char" data-src="img/s6_porky.webp" alt="Porky" style="--x:705;--y:1155;--w:375" width="420" height="489">
+      <a class="hot pill" id="confirmarBtn" aria-label="Confirmar asistencia por WhatsApp" href="https://wa.me/51941562413?text=%C2%A1Hola!%20Confirmo%20mi%20asistencia%20al%20primer%20cumplea%C3%B1os%20de%20JAHSEN%20%F0%9F%8E%89" target="_blank" rel="noopener" style="--x:130;--y:1256;--w:552;--h:155"></a>
+    </div>
+  </section>
+
+  <!-- 7 · Cierre · Taz y Bugs -->
+  <section class="sec" id="s7" data-sound="p7_taz_bugs" data-auto="1">
+    <div class="page">
+      <img class="bg" data-src="img/p7.webp" alt="¡Eso es todo, amigos! ¡Te esperamos!" width="1080" height="1920">
+      <img class="el char" data-src="img/s7_taz.webp" alt="Taz" style="--x:0;--y:1230;--w:488" width="488" height="560">
+      <img class="el char" data-src="img/s7_bugs.webp" alt="Bugs Bunny" style="--x:668;--y:1240;--w:396" width="396" height="536">
+      <button class="hot pill" id="volverBtn" aria-label="Volver al inicio" style="--x:494;--y:1068;--w:513;--h:120"></button>
+      <p class="credit" style="--x:40;--y:1800;--w:1000">Música: “Merry Go”, Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
+    </div>
+  </section>
+</div>
+
+<div class="hint" id="hint"><span>⌃</span>Desliza para ver más</div>
+<button id="muteBtn" aria-label="Silenciar" title="Silenciar / activar sonido">
+  <svg id="icoOn" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.05A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06A9 9 0 0 0 14 3.23z"/></svg>
+  <svg id="icoOff" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" style="display:none"><path fill="currentColor" d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12a9 9 0 0 0-7-8.77v2.06A7 7 0 0 1 19 12zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a9 9 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+</button>
+<canvas class="confetti" id="confettiTop"></canvas>
+<script src="app.js"></script>
+</body>
+</html>
