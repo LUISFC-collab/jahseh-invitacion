@@ -2,13 +2,13 @@
   'use strict';
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
-  var scroller = $('#scroller');
-  var LOG = window.__jahsenLog = [];
+  var stage = $('#stage');
+  var LOG = window.__jahsenLog = []; window.__jahsenVersion = 'tap-v2';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
   function fit() {
-    var w = scroller.clientWidth, h = scroller.clientHeight;
+    var w = stage.clientWidth, h = stage.clientHeight;
     var pw = Math.min(w, h * 9 / 16);
     document.documentElement.style.setProperty('--pw', pw + 'px');
   }
@@ -26,8 +26,8 @@
   var AUDIO = {
     intro: 'audio/intro.mp3', fondo: 'audio/fondo.mp3', sobre: 'audio/sobre.mp3',
     p1_piolin: 'audio/p1_piolin.mp3', p2_bugs: 'audio/p2_bugs.mp3', p3_lucas: 'audio/p3_lucas.mp3',
-    p4_correcaminos: 'audio/p4_correcaminos.mp3', p5_silvestre: 'audio/p5_silvestre.mp3',
-    p6_porky: 'audio/p6_porky.mp3', p7_taz_bugs: 'audio/p7_taz_bugs.mp3'
+    p4_correcaminos: 'audio/p4_correcaminos.mp3', p5_silvestre: 'audio/p5_silvestre.mp3?v=2',
+    p6_porky: 'audio/p6_porky.mp3', p7_taz_bugs: 'audio/p7_taz_bugs.mp3?v=2'
   };
   window.__jahsenAudio = { buffers: buffers, plays: [] };
 
@@ -125,6 +125,15 @@
     }).catch(function () { return false; });
   }
 
+  function stopSfx() {
+    Object.keys(sfxNodes).forEach(function (o) {
+      if (o === 'sobre') return;
+      try { sfxNodes[o].onended = null; sfxNodes[o].stop(); } catch (e) {}
+      delete sfxNodes[o]; activeSfx = Math.max(0, activeSfx - 1);
+    });
+    setMusicLevel(0.6);
+  }
+
   /* silencio */
   var muteBtn = $('#muteBtn');
   function renderMute() {
@@ -170,12 +179,48 @@
   loadBg(sections[0]); loadChars(sections[0]); loadBg(sections[1]); loadChars(sections[1]);
   ['intro', 'sobre', 'p2_bugs'].forEach(fetchRaw);
 
-  var opened = false, played = {}, current = sections[0];
+  /* ---------- visor por toques (tipo historia) ---------- */
+  var opened = false, played = {}, idx = 0, current = sections[0], navLock = 0;
+  var hint = $('#hint'), again = $('#againBtn'), bars = $$('#progress i'), progress = $('#progress');
+  var NAV_MS = 450;
+  window.__jahsenNav = { navs: [] };
+
+  function layout(instant) {
+    sections.forEach(function (s, i) {
+      if (instant) s.classList.add('instant');
+      s.classList.toggle('active', i === idx);
+      s.classList.toggle('left', i < idx);
+      s.setAttribute('aria-hidden', i === idx ? 'false' : 'true');
+      if (instant) { void s.offsetWidth; s.classList.remove('instant'); }
+    });
+    bars.forEach(function (b, i) { b.classList.toggle('on', i <= idx); });
+    progress.classList.toggle('show', opened);
+    var last = idx === sections.length - 1;
+    hint.classList.toggle('show', opened && !last);
+    again.classList.toggle('show', opened && last);
+    document.body.setAttribute('data-screen', String(idx + 1));
+  }
+  function goTo(i, why) {
+    if (i < 0 || i >= sections.length || i === idx) return false;
+    var now = Date.now();
+    if (now < navLock) return false;            // antirrebote: un doble toque no salta dos pantallas
+    navLock = now + NAV_MS;
+    stopSfx();
+    idx = i; current = sections[i];
+    window.__jahsenNav.navs.push((why || '') + '>' + (i + 1));
+    log('nav ' + (why || '') + ' > s' + (i + 1));
+    loadBg(current); if (opened) { loadChars(current); if (sections[i + 1]) { loadBg(sections[i + 1]); loadChars(sections[i + 1]); } }
+    layout(false);
+    onSectionVisible(current);
+    return true;
+  }
+  function next(why) { return goTo(idx + 1, why || 'next'); }
+  function prev(why) { return goTo(idx - 1, why || 'prev'); }
+
   function onSectionVisible(sec) {
-    current = sec;
     if (!opened) return;
     if (sec.getAttribute('data-auto') === '1' && !played[sec.id]) {
-      played[sec.id] = true;
+      played[sec.id] = true;                      // suena UNA vez al llegar; luego solo con los personajes / títulos
       loadChars(sec).then(function () {
         if (current !== sec) return;
         restartSection(sec);
@@ -184,67 +229,107 @@
     }
     if (sec.id === 's4') maybeParty();
   }
-  if ('IntersectionObserver' in window) {
-    var pre = new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting) { loadBg(e.target); if (opened) loadChars(e.target); } });
-    }, { root: scroller, rootMargin: '150% 0px 150% 0px' });
-    var vis = new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting && e.intersectionRatio >= 0.6) onSectionVisible(e.target); });
-    }, { root: scroller, threshold: [0.6] });
-    sections.forEach(function (s) { pre.observe(s); vis.observe(s); });
-  } else {
-    sections.forEach(function (s) { loadBg(s); loadChars(s); });
-  }
 
-  /* toques en personajes */
+  /* zonas que NO cambian de página */
+  var NO_NAV = '.hot, a, button, img.char, #countdown, #muteBtn, #againBtn';
+  function replay(sec, el) {
+    if (!unlocked) unlock();
+    if (el) { el.classList.remove('boing'); void el.offsetWidth; el.classList.add('boing'); }
+    restartSection(sec);
+    playSfx(sec.getAttribute('data-sound'));
+    window.__jahsenAudio.replays = (window.__jahsenAudio.replays || 0) + 1;
+  }
+  function bindTap(el, fn) {
+    el.addEventListener('click', function (e) { e.stopPropagation(); fn(e); });
+  }
   $$('img.char').forEach(function (im) {
-    im.addEventListener('click', function () {
-      if (!unlocked) unlock();
-      var sec = im.closest('.sec');
-      restartSection(sec);
-      playSfx(sec.getAttribute('data-sound'));
+    im.classList.add('nudge');
+    bindTap(im, function () {
+      if (!opened && im.closest('#s1')) { openEnvelope(); return; }
+      replay(im.closest('.sec'), im);
     });
+    im.addEventListener('animationend', function (e) { if (e.animationName === 'boing') im.classList.remove('boing'); });
     im.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
-  $('#escucharBtn').addEventListener('click', function () {
-    if (!unlocked) unlock();
-    restartSection($('#s2')); playSfx('p2_bugs');
+  $$('.hot.tap').forEach(function (b) {
+    bindTap(b, function () {
+      if (!opened && b.closest('#s1')) { openEnvelope(); return; }
+      var sec = b.closest('.sec');
+      var target = sec.querySelector('img.char') || b;
+      replay(sec, b);
+      if (target !== b) { target.classList.remove('boing'); void target.offsetWidth; target.classList.add('boing'); }
+    });
+    b.addEventListener('animationend', function () { b.classList.remove('boing'); });
   });
-  $('#volverBtn').addEventListener('click', function () {
-    $('#s2').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $$('a.hot').forEach(function (a) { a.addEventListener('click', function (e) { e.stopPropagation(); log('link ' + a.id); }); });
+  $('#countdown').addEventListener('click', function (e) { e.stopPropagation(); });
+  function verDeNuevo() {
+    Object.keys(played).forEach(function (k) { played[k] = false; });
+    navLock = 0; goTo(1, 'again');
+  }
+  bindTap($('#volverBtn'), verDeNuevo);
+  bindTap(again, verDeNuevo);
+
+  /* toque en zona libre: derecha = siguiente, 25 % izquierdo = anterior */
+  var swipe = null, swallowClick = 0;
+  stage.addEventListener('click', function (e) {
+    if (Date.now() < swallowClick) return;
+    if (e.target.closest && e.target.closest(NO_NAV)) return;
+    if (!opened) { openEnvelope(); return; }
+    var x = e.clientX, w = stage.clientWidth;
+    if (x < w * 0.25) prev('tapL'); else if (idx < sections.length - 1) next('tapR');
+  });
+  /* deslizar izquierda/derecha (opcional) */
+  stage.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { swipe = null; return; }
+    swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  stage.addEventListener('touchend', function (e) {
+    if (!swipe || !opened) return;
+    var t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3 && Date.now() - swipe.t < 800) {
+      swallowClick = Date.now() + 400;
+      if (dx < 0) next('swipeL'); else prev('swipeR');
+    }
+    swipe = null;
+  }, { passive: true });
+  /* sin desplazamiento nativo ni "tirar para recargar" */
+  document.addEventListener('touchmove', function (e) { if (e.touches.length === 1) e.preventDefault(); }, { passive: false });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); });
+  window.addEventListener('wheel', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('keydown', function (e) {
+    if (!opened) { if (e.key === 'Enter' || e.key === ' ') { if (document.activeElement === document.body) { e.preventDefault(); openEnvelope(); } } return; }
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); next('key'); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev('key'); }
   });
 
+
   /* ---------- abrir el sobre ---------- */
-  var sobre = $('#sobre'), flash = $('#flash'), hint = $('#hint');
+  var sobre = $('#sobre'), flash = $('#flash');
   function openEnvelope() {
     unlock();
     playSfx('sobre', 0.9);
     startMusic();
-    if (opened) { $('#s2').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (opened) { navLock = 0; goTo(1, 'sobre'); return; }
     opened = true;
     played.s2 = false;
     document.body.classList.add('opened');
     $('#abrirBtn').classList.remove('pulse');
     sobre.classList.add('wiggle');
     sections.forEach(function (s, i) { if (i > 1) loadBg(s); });
+    loadChars(sections[2]);
     setTimeout(function () {
       sobre.classList.remove('wiggle'); sobre.classList.add('fly');
       flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
       confetti($('#confettiTop'), 1600, 140);
     }, 500);
-    setTimeout(function () {
-      scroller.classList.remove('locked');
-      $('#s2').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setTimeout(function () { hint.classList.add('show'); }, 900);
-    }, 1150);
+    setTimeout(function () { navLock = 0; goTo(1, 'open'); }, 1150);
     setTimeout(function () { sobre.classList.remove('fly'); }, 2600);
   }
-  $('#abrirSobre').addEventListener('click', openEnvelope);
-  $('#abrirBtn').addEventListener('click', openEnvelope);
-  scroller.addEventListener('scroll', function () {
-    if (hint.classList.contains('show') && scroller.scrollTop > scroller.clientHeight * 1.5) hint.classList.remove('show');
-  }, { passive: true });
-  setTimeout(function () { hint.classList.remove('show'); }, 15000);
+  bindTap($('#abrirSobre'), openEnvelope);
+  bindTap($('#abrirBtn'), openEnvelope);
+  layout(true);
 
   /* ---------- contador ---------- */
   var TARGET = Date.parse('2026-11-28T10:00:00-05:00');
