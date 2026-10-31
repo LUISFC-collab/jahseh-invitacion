@@ -1,5 +1,5 @@
 /* =====================================================================
-   Confirmación de asistencia (pantalla 7 · Lola) · v14
+   Confirmación de asistencia (pantalla 7 · Lola) · v14 (v16: máximo 2 adultos y 2 niños)
    URL_HOJA: pega aquí la URL de la aplicación web de Google Apps Script
    (termina en /exec). Si queda vacía, solo se abre WhatsApp.
    v14: contadores de ADULTOS y NIÑOS por separado; por cada uno aparece su
@@ -12,7 +12,7 @@ var URL_HOJA = '';
 (function () {
   'use strict';
   var WHATSAPP = '51941562413';           // solo el WhatsApp de mamá
-  var MAX_ADULTOS = 10, MAX_NINOS = 10;
+  var MAX_ADULTOS = 2, MAX_NINOS = 2;     // v16: máximo 2 adultos y 2 niños por invitación (pedido de Luis)
   var HOJA = window.__URL_HOJA_PRUEBA || URL_HOJA;   // __URL_HOJA_PRUEBA solo se usa en pruebas locales
 
   var $ = function (s) { return document.querySelector(s); };
