@@ -3,7 +3,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var stage = $('#stage');
-  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v13-final';
+  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v14-rsvp';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
@@ -42,9 +42,12 @@
     // P7 Lola al tocar (MP3 originales del doblaje latino; carga perezosa: solo cuando la pantalla 7 está cerca)
     s7_lola_01: 'audio/s7_lola_01.mp3', s7_lola_02: 'audio/s7_lola_02.mp3', s7_lola_03: 'audio/s7_lola_03.mp3', s7_lola_11: 'audio/s7_lola_11.mp3',
     // v12: P4 Lucas «Después de dormir un poco.» (frase_03 sync5) y P6 Silvestre f14 «crujientes esponjositos bocadillos» / f09 «chocolate» (carga perezosa)
-    s4_lucas_f03: 'audio/s4_lucas_f03.mp3', s6_silvestre_f14: 'audio/s6_silvestre_f14.mp3', s6_silvestre_f09: 'audio/s6_silvestre_f09.mp3'
+    s4_lucas_f03: 'audio/s4_lucas_f03.mp3', s6_silvestre_f14: 'audio/s6_silvestre_f14.mp3', s6_silvestre_f09: 'audio/s6_silvestre_f09.mp3',
+    // v14: formulario de confirmación, Bugs adulto (paquete de Luis /workspace/bugs_adulto_pkg/): entrada = fanfarria + pasos SIN voz
+    // (sonido_escena_una_vez.mp3 0-1,60 s, la voz empieza en 1,653 s); al tocarlo, «Ehh... ¿Qué hay de nuevo, viejo?» (doblaje latino, voz sola del paquete)
+    s7_bugs_entra: 'audio/s7_bugs_entra_pasos.mp3', s7_bugs_voz: 'audio/s7_bugs_que_hay_de_nuevo_viejo.mp3'
   };
-  var LAZY = { s7_lola_01: 1, s7_lola_02: 1, s7_lola_03: 1, s7_lola_11: 1, s4_lucas_f03: 1, s6_silvestre_f14: 1, s6_silvestre_f09: 1 };
+  var LAZY = { s7_lola_01: 1, s7_lola_02: 1, s7_lola_03: 1, s7_lola_11: 1, s4_lucas_f03: 1, s6_silvestre_f14: 1, s6_silvestre_f09: 1, s7_bugs_entra: 1, s7_bugs_voz: 1 };
   window.__jahsehAudio = { buffers: buffers, plays: [], at: [] };
 
   function fetchRaw(k) {
@@ -154,6 +157,11 @@
     }).catch(function () { return false; });
   }
 
+  /* v14: acceso para rsvp.js (Bugs adulto del formulario): precarga perezosa y sonido por el mismo mezclador (respeta el botón de silencio) */
+  window.__jahsehSfx = {
+    pre: function (k) { if (!AUDIO[k]) return; fetchRaw(k); if (ctx) getBuffer(k).catch(function () {}); },
+    play: function (k, off) { return playSfx(k, 1, off || 0); }
+  };
   function stopSfx() {
     Object.keys(sfxNodes).forEach(function (o) {
       if (o === 'sobre') return;
@@ -201,6 +209,7 @@
     setTimeout(function () { fin(false); }, 1500);
     t.src = 'data:image/webp;base64,UklGRlIAAABXRUJQVlA4WAoAAAASAAAAAAAAAAAAQU5JTQYAAAD/////AABBTk1GJgAAAAAAAAAAAAAAAAAAAGQAAABWUDhMDQAAAC8AAAAQBxAREYiI/gcA';
   });
+  window.__jahsehWebp = webpReady;   // v14: rsvp.js muestra a Bugs adulto solo si el navegador muestra WebP animado (sin GIF de respaldo)
   function charUrl(im) {
     var src = im.parentNode && im.parentNode.querySelector('source[data-srcset]');
     return (WEBP && src) ? src.getAttribute('data-srcset') : im.getAttribute('data-src');

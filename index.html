@@ -19,7 +19,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="img/p1.webp" as="image">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
 <div id="stage">
@@ -209,14 +209,33 @@
       <h2 id="rsvpTitulo">¡Confirma con mamá! <span aria-hidden="true">💙</span></h2>
       <p class="rsvp-sub">Primer añito de JAHSEH ANTHONY · Sábado 28 de noviembre, 10:00 a. m.</p>
       <label class="rsvp-campo">
-        <span>Tu nombre (quien acepta la invitación)</span>
+        <span>Tu nombre (quien acepta la invitación) <b class="rsvp-oblig">obligatorio</b></span>
         <input type="text" id="rsvpNombre" name="nombre" autocomplete="name" maxlength="60" placeholder="Nombre y apellido">
         <small class="rsvp-error" id="errNombre" aria-live="polite"></small>
       </label>
-      <label class="rsvp-campo">
-        <span>Número de personas que asistirán (contándote a ti)</span>
-        <select id="rsvpCantidad" name="personas"></select>
-      </label>
+      <!-- v14: cantidad de adultos y de niños por separado; por cada uno aparece su cajetín de nombre (rsvp.js) -->
+      <p class="rsvp-cuantos">¿Cuántos asistirán? <small>(cuéntate a ti también)</small></p>
+      <div class="rsvp-conts">
+        <div class="rsvp-cont adulto" role="group" aria-labelledby="lblAdultos">
+          <span class="rsvp-cont-tit" id="lblAdultos">Adultos</span>
+          <div class="rsvp-cont-fila">
+            <button type="button" class="rsvp-pm" id="menosAdultos" aria-label="Un adulto menos">−</button>
+            <output id="numAdultos" aria-live="polite">0</output>
+            <button type="button" class="rsvp-pm" id="masAdultos" aria-label="Un adulto más">+</button>
+          </div>
+        </div>
+        <div class="rsvp-cont nino" role="group" aria-labelledby="lblNinos">
+          <span class="rsvp-cont-tit" id="lblNinos">Niños</span>
+          <div class="rsvp-cont-fila">
+            <button type="button" class="rsvp-pm" id="menosNinos" aria-label="Un niño menos">−</button>
+            <output id="numNinos" aria-live="polite">0</output>
+            <button type="button" class="rsvp-pm" id="masNinos" aria-label="Un niño más">+</button>
+          </div>
+        </div>
+      </div>
+      <small class="rsvp-error" id="errCantidad" aria-live="polite"></small>
+      <div class="rsvp-nombres" id="rsvpNombres"></div>
+      <p class="rsvp-total" id="rsvpTotal" aria-live="polite"></p>
       <p class="rsvp-error rsvp-general" id="errGeneral" aria-live="polite"></p>
       <button type="submit" class="rsvp-btn" id="rsvpEnviar">¡Confirmar asistencia!</button>
       <button type="button" class="rsvp-btn2" id="rsvpNoVoy">No podré asistir</button>
@@ -229,9 +248,17 @@
       <button type="button" class="rsvp-btn2" id="rsvpEditar">Cambiar mis datos</button>
     </div>
   </div>
+  <!-- v14: Bugs adulto (paquete de Luis, sin retocar). No sale al abrir: entra caminando UNA vez cuando el invitado empieza a escribir su nombre
+       (solo pasos, sin voz). Al tocarlo dice «¿Qué hay de nuevo, viejo?» (voz del doblaje latino + globo), repetible. Va encima del borde
+       izquierdo de la hoja, fuera de ella: no tapa cajetines ni botones (rsvp.js reserva su alto, también con el teclado abierto). -->
+  <div class="rsvp-bugs" id="rsvpBugs" hidden>
+    <button type="button" class="rsvp-bugs-btn" id="bugsBtn" aria-label="Toca a Bugs Bunny"><img id="bugsImg" alt="Bugs Bunny" width="214" height="220"></button>
+    <p class="rsvp-globo" id="bugsGlobo" aria-live="polite" hidden>¿Qué hay de nuevo, viejo?</p>
+    <p class="rsvp-tocame" id="bugsTocame" aria-hidden="true" hidden>¡Tócame!</p>
+  </div>
 </div>
 <canvas class="confetti" id="confettiTop"></canvas>
-<script src="app.js?v=25"></script>
-<script src="rsvp.js?v=10"></script>
+<script src="app.js?v=26"></script>
+<script src="rsvp.js?v=26"></script>
 </body>
 </html>

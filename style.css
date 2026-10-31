@@ -158,3 +158,60 @@ body.debug .hot.s3tap{outline-color:#ff6d00;background:rgba(255,109,0,.18)}
 .s3fotos img.pasa{box-shadow:0 calc(var(--pw)*.008) calc(var(--pw)*.02) rgba(0,0,0,.28)}
 body.debug .s3fotos{outline:3px dashed #aa00ff;background:rgba(170,0,255,.12)}
 img.layer.off{visibility:hidden}
+/* ---------- v14 · Confirmación: contadores de adultos y niños + cajetines de nombre diferenciados ---------- */
+.rsvp-oblig{font:700 11px/1 system-ui,-apple-system,sans-serif;color:#fff;background:var(--blue);border-radius:999px;padding:3px 7px;vertical-align:2px;margin-left:4px;text-transform:uppercase;letter-spacing:.03em}
+.rsvp-cuantos{margin:4px 0 8px;font-size:18px;color:var(--blue-d)}
+.rsvp-cuantos small{font:14px/1.2 system-ui,-apple-system,sans-serif;color:#55608a}
+.rsvp-conts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 4px}
+.rsvp-cont{border-radius:16px;padding:8px 6px 10px;text-align:center;border:3px solid}
+.rsvp-cont.adulto{background:#E6ECFB;border-color:var(--blue)}
+.rsvp-cont.nino{background:#FFF3C9;border-color:#E08A00}
+.rsvp-cont-tit{display:block;font-size:19px;margin:0 0 6px}
+.rsvp-cont.adulto .rsvp-cont-tit{color:var(--blue)}
+.rsvp-cont.nino .rsvp-cont-tit{color:#A35A00}
+.rsvp-cont-fila{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.rsvp-cont output{min-width:34px;font-size:34px;line-height:1;color:var(--blue-d);font-variant-numeric:tabular-nums}
+.rsvp-pm{width:52px;height:52px;flex:0 0 52px;border-radius:50%;border:3px solid var(--blue-d);font:30px/1 "Lilita One",system-ui,sans-serif;padding:0 0 3px;cursor:pointer;
+  box-shadow:0 3px 0 var(--blue-d);touch-action:manipulation;-webkit-tap-highlight-color:transparent;color:#fff}
+.rsvp-cont.adulto .rsvp-pm{background:var(--blue)}
+.rsvp-cont.nino .rsvp-pm{background:#F29F05;color:#3d2200}
+.rsvp-pm:active{transform:translateY(2px);box-shadow:0 1px 0 var(--blue-d)}
+.rsvp-pm:disabled{opacity:.35;box-shadow:none;cursor:default}
+#errCantidad{margin:2px 2px 6px}
+.rsvp-nombres{margin:10px 0 0}
+.rsvp-nombres[hidden]{display:none}
+.rsvp-caj{display:flex;align-items:stretch;margin:0 0 8px;border-radius:14px;border:2px solid;overflow:hidden;background:#fff}
+.rsvp-caj.adulto{border-color:var(--blue)}
+.rsvp-caj.nino{border-color:#E08A00;border-style:dashed;border-width:2.5px}
+.rsvp-chip{flex:0 0 104px;display:flex;align-items:center;justify-content:center;text-align:center;padding:4px;font-size:15px;line-height:1.05}
+.rsvp-caj.adulto .rsvp-chip{background:var(--blue);color:#fff}
+.rsvp-caj.nino .rsvp-chip{background:#FFD23F;color:#7a3f00}
+.rsvp-caj input{flex:1;min-width:0;border:0;font:16px/1.2 system-ui,-apple-system,sans-serif;padding:12px 10px;color:#1c1c1c;background:transparent;-webkit-user-select:text;user-select:text;-webkit-appearance:none;appearance:none}
+.rsvp-caj.nino input{background:#FFFBEA}
+.rsvp-caj:focus-within{box-shadow:0 0 0 3px rgba(22,58,176,.22)}
+.rsvp-caj input:focus{outline:none}
+.rsvp-total{margin:4px 0 8px;text-align:right;font-size:18px;color:var(--blue)}
+.rsvp-total:empty{display:none}
+/* v14 · Bugs adulto sobre el borde izquierdo de la hoja (fuera de ella: no tapa cajetines ni botones) */
+.rsvp-bugs{position:absolute;left:4px;z-index:2;width:107px;height:110px;pointer-events:none}
+.rsvp-bugs[hidden]{display:none}
+.rsvp-bugs-btn{position:absolute;inset:0;padding:0;border:0;background:transparent;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.rsvp-bugs-btn img{display:block;width:100%;height:100%;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25))}
+.rsvp-globo{position:absolute;left:100px;top:6px;margin:0;width:max-content;max-width:190px;padding:8px 12px;background:#fff;border:3px solid var(--blue);border-radius:18px;
+  font-size:17px;line-height:1.1;color:var(--blue-d);box-shadow:0 3px 0 var(--blue-d);animation:globo .18s ease-out}
+.rsvp-globo::before{content:"";position:absolute;left:-12px;top:16px;border:8px solid transparent;border-right:12px solid var(--blue);border-left:0}
+.rsvp-globo[hidden],.rsvp-tocame[hidden]{display:none}
+.rsvp-tocame{position:absolute;left:92px;top:38px;margin:0;padding:3px 9px;border-radius:999px;background:var(--yellow);border:2px solid var(--blue-d);font-size:14px;color:var(--blue-d);animation:tocame 1.4s ease-in-out infinite}
+@keyframes globo{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+@keyframes tocame{50%{transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.rsvp-tocame,.rsvp-globo{animation:none}}
+
+/* v14: teclado del celular — la hoja ocupa el área visible (dvh / visualViewport), el botón de confirmar queda pegado abajo
+   y Bugs se encoge a un lado cuando hay poca altura */
+#rsvp{height:100%;height:100dvh}
+.rsvp-btn{position:sticky;bottom:8px;z-index:3;box-shadow:0 4px 0 var(--blue-d),0 0 0 8px var(--cream)}
+.rsvp-btn:active{box-shadow:0 1px 0 var(--blue-d),0 0 0 8px var(--cream)}
+#rsvp.teclado .rsvp-hoja h2{font-size:22px}
+#rsvp.bugs-mini .rsvp-bugs{width:78px;height:80px}
+#rsvp.bugs-mini .rsvp-globo{left:74px;top:0;font-size:15px;padding:6px 10px}
+#rsvp.bugs-mini .rsvp-tocame{left:70px;top:26px;font-size:13px}
