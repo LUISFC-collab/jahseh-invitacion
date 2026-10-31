@@ -3,7 +3,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var stage = $('#stage');
-  var LOG = window.__jahsenLog = []; window.__jahsenVersion = 'v8-8pantallas';
+  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v9-rsvp';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
@@ -28,7 +28,7 @@
     s1_piolin: 'audio/s1_piolin.mp3', s4_lucas: 'audio/s4_lucas.mp3', s5_taz: 'audio/s5_taz.mp3',
     s6_silvestre: 'audio/s6_silvestre.mp3', s7_lola: 'audio/s7_lola.mp3', s8_cierre: 'audio/s8_cierre.mp3'
   };
-  window.__jahsenAudio = { buffers: buffers, plays: [] };
+  window.__jahsehAudio = { buffers: buffers, plays: [] };
 
   function fetchRaw(k) {
     if (!raw[k]) {
@@ -87,7 +87,7 @@
       var s = ctx.createBufferSource(); s.buffer = b; s.connect(musicGain);
       musicBase = MUSIC_INTRO; setMusicLevel(0.05);
       s.onended = startLoop; s.start(0);
-      window.__jahsenAudio.plays.push('intro');
+      window.__jahsehAudio.plays.push('intro');
       log('intro start');
     }).catch(startLoop);
   }
@@ -100,7 +100,7 @@
       musicGain.gain.setValueAtTime(0, ctx.currentTime);
       setMusicLevel(1.5);
       loopSrc.start(0);
-      window.__jahsenAudio.plays.push('fondo');
+      window.__jahsehAudio.plays.push('fondo');
       log('loop start');
     }).catch(function () {});
   }
@@ -118,7 +118,7 @@
       sfxNodes[k] = s; activeSfx++; setMusicLevel(0.2);
       s.onended = function () { if (sfxNodes[k] === s) delete sfxNodes[k]; activeSfx = Math.max(0, activeSfx - 1); setMusicLevel(0.6); };
       s.start(0);
-      window.__jahsenAudio.plays.push(k);
+      window.__jahsehAudio.plays.push(k);
       log('sfx ' + k);
       return true;
     }).catch(function () { return false; });
@@ -189,7 +189,7 @@
   var opened = false, played = {}, idx = 0, current = sections[0], navLock = 0;
   var hint = $('#hint'), again = $('#againBtn'), bars = $$('#progress i'), progress = $('#progress');
   var NAV_MS = 450;
-  window.__jahsenNav = { navs: [], goTo: function (i) { navLock = 0; return goTo(i, 'qa'); } };
+  window.__jahsehNav = { navs: [], goTo: function (i) { navLock = 0; return goTo(i, 'qa'); } };
 
   function layout(instant) {
     sections.forEach(function (s, i) {
@@ -213,7 +213,7 @@
     navLock = now + NAV_MS;
     stopSfx();
     idx = i; current = sections[i];
-    window.__jahsenNav.navs.push((why || '') + '>' + (i + 1));
+    window.__jahsehNav.navs.push((why || '') + '>' + (i + 1));
     loadBg(current); loadChars(current);
     if (sections[i + 1]) { loadBg(sections[i + 1]); loadChars(sections[i + 1]); }
     layout(false);
@@ -280,11 +280,13 @@
     }
     swipe = null;
   }, { passive: true });
-  document.addEventListener('touchmove', function (e) { if (e.touches.length === 1) e.preventDefault(); }, { passive: false });
+  function enForm(e) { return document.body.classList.contains('rsvp-open') || (e.target && e.target.closest && e.target.closest('#rsvp')); }
+  document.addEventListener('touchmove', function (e) { if (enForm(e)) return; if (e.touches.length === 1) e.preventDefault(); }, { passive: false });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   document.addEventListener('dblclick', function (e) { e.preventDefault(); });
-  window.addEventListener('wheel', function (e) { e.preventDefault(); }, { passive: false });
+  window.addEventListener('wheel', function (e) { if (enForm(e)) return; e.preventDefault(); }, { passive: false });
   document.addEventListener('keydown', function (e) {
+    if (enForm(e)) return;
     if (!opened) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEnvelope(); } return; }
     if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); next('key'); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev('key'); }
