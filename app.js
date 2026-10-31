@@ -3,7 +3,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var stage = $('#stage');
-  var LOG = window.__jahsenLog = []; window.__jahsenVersion = 'tap-v2';
+  var LOG = window.__jahsenLog = []; window.__jahsenVersion = 'v8-8pantallas';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
@@ -25,9 +25,8 @@
   var musicBase = MUSIC_INTRO, activeSfx = 0, sfxNodes = {};
   var AUDIO = {
     intro: 'audio/intro.mp3', fondo: 'audio/fondo.mp3', sobre: 'audio/sobre.mp3',
-    p1_piolin: 'audio/p1_piolin.mp3', p2_bugs: 'audio/p2_bugs.mp3', p3_lucas: 'audio/p3_lucas.mp3',
-    p4_correcaminos: 'audio/p4_correcaminos.mp3', p5_silvestre: 'audio/p5_silvestre.mp3?v=2',
-    p6_porky: 'audio/p6_porky.mp3', p7_taz_bugs: 'audio/p7_taz_bugs.mp3?v=2'
+    s1_piolin: 'audio/s1_piolin.mp3', s4_lucas: 'audio/s4_lucas.mp3', s5_taz: 'audio/s5_taz.mp3',
+    s6_silvestre: 'audio/s6_silvestre.mp3', s7_lola: 'audio/s7_lola.mp3', s8_cierre: 'audio/s8_cierre.mp3'
   };
   window.__jahsenAudio = { buffers: buffers, plays: [] };
 
@@ -150,14 +149,21 @@
     if (document.hidden) ctx.suspend(); else if (unlocked) ctx.resume();
   });
 
-  /* ---------- carga diferida de imágenes y animaciones ---------- */
+
+  /* ---------- carga diferida: WebP con alfa, GIF de respaldo ---------- */
+  var WEBP = false;
+  try { WEBP = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') === 0; } catch (e) {}
+  function charUrl(im) {
+    var src = im.parentNode && im.parentNode.querySelector('source[data-srcset]');
+    return (WEBP && src) ? src.getAttribute('data-srcset') : im.getAttribute('data-src');
+  }
   var blobs = {};
   function loadBg(sec) {
-    $$('#' + sec.id + ' img.bg[data-src]').forEach(function (im) { im.src = im.getAttribute('data-src'); im.removeAttribute('data-src'); });
+    $$('#' + sec.id + ' img[data-src]:not(.char)').forEach(function (im) { im.src = im.getAttribute('data-src'); im.removeAttribute('data-src'); });
   }
   function loadChars(sec) {
     return Promise.all($$('#' + sec.id + ' img.char').map(function (im) {
-      var url = im.getAttribute('data-src');
+      var url = charUrl(im);
       if (!blobs[url]) {
         blobs[url] = fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
           .catch(function (e) { log('img error ' + url + ' ' + e); return null; });
@@ -177,13 +183,13 @@
 
   var sections = $$('.sec');
   loadBg(sections[0]); loadChars(sections[0]); loadBg(sections[1]); loadChars(sections[1]);
-  ['intro', 'sobre', 'p2_bugs'].forEach(fetchRaw);
+  ['intro', 'sobre', 's1_piolin'].forEach(fetchRaw);
 
   /* ---------- visor por toques (tipo historia) ---------- */
   var opened = false, played = {}, idx = 0, current = sections[0], navLock = 0;
   var hint = $('#hint'), again = $('#againBtn'), bars = $$('#progress i'), progress = $('#progress');
   var NAV_MS = 450;
-  window.__jahsenNav = { navs: [] };
+  window.__jahsenNav = { navs: [], goTo: function (i) { navLock = 0; return goTo(i, 'qa'); } };
 
   function layout(instant) {
     sections.forEach(function (s, i) {
@@ -203,13 +209,13 @@
   function goTo(i, why) {
     if (i < 0 || i >= sections.length || i === idx) return false;
     var now = Date.now();
-    if (now < navLock) return false;            // antirrebote: un doble toque no salta dos pantallas
+    if (now < navLock) return false;
     navLock = now + NAV_MS;
     stopSfx();
     idx = i; current = sections[i];
     window.__jahsenNav.navs.push((why || '') + '>' + (i + 1));
-    log('nav ' + (why || '') + ' > s' + (i + 1));
-    loadBg(current); if (opened) { loadChars(current); if (sections[i + 1]) { loadBg(sections[i + 1]); loadChars(sections[i + 1]); } }
+    loadBg(current); loadChars(current);
+    if (sections[i + 1]) { loadBg(sections[i + 1]); loadChars(sections[i + 1]); }
     layout(false);
     onSectionVisible(current);
     return true;
@@ -218,51 +224,34 @@
   function prev(why) { return goTo(idx - 1, why || 'prev'); }
 
   function onSectionVisible(sec) {
-    if (!opened) return;
-    if (sec.getAttribute('data-auto') === '1' && !played[sec.id]) {
-      played[sec.id] = true;                      // suena UNA vez al llegar; luego solo con los personajes / títulos
-      loadChars(sec).then(function () {
-        if (current !== sec) return;
-        restartSection(sec);
-        playSfx(sec.getAttribute('data-sound'));
-      });
-    }
-    if (sec.id === 's4') maybeParty();
+    // cada pantalla reinicia su animación al entrar; el sonido suena una vez (solo después del primer toque)
+    loadChars(sec).then(function () {
+      if (current !== sec) return;
+      restartSection(sec);
+      var k = sec.getAttribute('data-sound');
+      if (unlocked && k && sec.getAttribute('data-auto') === '1' && !played[sec.id]) { played[sec.id] = true; playSfx(k); }
+    });
+    if (sec.id === 's5') maybeParty();
   }
 
-  /* zonas que NO cambian de página */
-  var NO_NAV = '.hot, a, button, img.char, #countdown, #muteBtn, #againBtn';
+  var NO_NAV = '.hot, a, button, img.char, #muteBtn, #againBtn';
   function replay(sec, el) {
     if (!unlocked) unlock();
     if (el) { el.classList.remove('boing'); void el.offsetWidth; el.classList.add('boing'); }
     restartSection(sec);
-    playSfx(sec.getAttribute('data-sound'));
-    window.__jahsenAudio.replays = (window.__jahsenAudio.replays || 0) + 1;
+    var k = sec.getAttribute('data-sound');
+    if (k) playSfx(k);
   }
-  function bindTap(el, fn) {
-    el.addEventListener('click', function (e) { e.stopPropagation(); fn(e); });
-  }
+  function bindTap(el, fn) { el.addEventListener('click', function (e) { e.stopPropagation(); fn(e); }); }
   $$('img.char').forEach(function (im) {
-    im.classList.add('nudge');
     bindTap(im, function () {
       if (!opened && im.closest('#s1')) { openEnvelope(); return; }
       replay(im.closest('.sec'), im);
     });
-    im.addEventListener('animationend', function (e) { if (e.animationName === 'boing') im.classList.remove('boing'); });
+    im.addEventListener('animationend', function () { im.classList.remove('boing'); });
     im.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
-  $$('.hot.tap').forEach(function (b) {
-    bindTap(b, function () {
-      if (!opened && b.closest('#s1')) { openEnvelope(); return; }
-      var sec = b.closest('.sec');
-      var target = sec.querySelector('img.char') || b;
-      replay(sec, b);
-      if (target !== b) { target.classList.remove('boing'); void target.offsetWidth; target.classList.add('boing'); }
-    });
-    b.addEventListener('animationend', function () { b.classList.remove('boing'); });
-  });
   $$('a.hot').forEach(function (a) { a.addEventListener('click', function (e) { e.stopPropagation(); log('link ' + a.id); }); });
-  $('#countdown').addEventListener('click', function (e) { e.stopPropagation(); });
   function verDeNuevo() {
     Object.keys(played).forEach(function (k) { played[k] = false; });
     navLock = 0; goTo(1, 'again');
@@ -270,7 +259,6 @@
   bindTap($('#volverBtn'), verDeNuevo);
   bindTap(again, verDeNuevo);
 
-  /* toque en zona libre: derecha = siguiente, 25 % izquierdo = anterior */
   var swipe = null, swallowClick = 0;
   stage.addEventListener('click', function (e) {
     if (Date.now() < swallowClick) return;
@@ -279,7 +267,6 @@
     var x = e.clientX, w = stage.clientWidth;
     if (x < w * 0.25) prev('tapL'); else if (idx < sections.length - 1) next('tapR');
   });
-  /* deslizar izquierda/derecha (opcional) */
   stage.addEventListener('touchstart', function (e) {
     if (e.touches.length !== 1) { swipe = null; return; }
     swipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
@@ -293,54 +280,42 @@
     }
     swipe = null;
   }, { passive: true });
-  /* sin desplazamiento nativo ni "tirar para recargar" */
   document.addEventListener('touchmove', function (e) { if (e.touches.length === 1) e.preventDefault(); }, { passive: false });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   document.addEventListener('dblclick', function (e) { e.preventDefault(); });
   window.addEventListener('wheel', function (e) { e.preventDefault(); }, { passive: false });
   document.addEventListener('keydown', function (e) {
-    if (!opened) { if (e.key === 'Enter' || e.key === ' ') { if (document.activeElement === document.body) { e.preventDefault(); openEnvelope(); } } return; }
+    if (!opened) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openEnvelope(); } return; }
     if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); next('key'); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev('key'); }
   });
 
-
-  /* ---------- abrir el sobre ---------- */
-  var sobre = $('#sobre'), flash = $('#flash');
+  /* ---------- abrir el sobre (el fondo no se mueve: destello + confeti azul) ---------- */
+  var flash = $('#flash');
   function openEnvelope() {
     unlock();
     playSfx('sobre', 0.9);
     startMusic();
     if (opened) { navLock = 0; goTo(1, 'sobre'); return; }
     opened = true;
-    played.s2 = false;
+    played.s1 = true;
     document.body.classList.add('opened');
-    $('#abrirBtn').classList.remove('pulse');
-    sobre.classList.add('wiggle');
+    $('#abrirSobre').classList.remove('pulse');
     sections.forEach(function (s, i) { if (i > 1) loadBg(s); });
-    loadChars(sections[2]);
-    setTimeout(function () {
-      sobre.classList.remove('wiggle'); sobre.classList.add('fly');
-      flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
-      confetti($('#confettiTop'), 1600, 140);
-    }, 500);
-    setTimeout(function () { navLock = 0; goTo(1, 'open'); }, 1150);
-    setTimeout(function () { sobre.classList.remove('fly'); }, 2600);
+    flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
+    confetti($('#confettiTop'), 1600, 140);
+    setTimeout(function () { navLock = 0; goTo(1, 'open'); }, 900);
   }
   bindTap($('#abrirSobre'), openEnvelope);
-  bindTap($('#abrirBtn'), openEnvelope);
   layout(true);
 
   /* ---------- contador ---------- */
   var TARGET = Date.parse('2026-11-28T10:00:00-05:00');
-  var cd = $('#countdown'), partyShown = false;
+  var s5 = $('#s5'), partyShown = false;
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function tick() {
     var ms = TARGET - Date.now();
-    if (ms <= 0) {
-      if (!cd.classList.contains('party')) { cd.classList.add('party'); $('#cdTitle').textContent = '¡Hoy es la fiesta!'; }
-      return;
-    }
+    if (ms <= 0) { s5.classList.add('party'); return; }
     var s = Math.floor(ms / 1000);
     $('#cdD').textContent = Math.floor(s / 86400);
     $('#cdH').textContent = pad(Math.floor(s % 86400 / 3600));
@@ -349,15 +324,15 @@
   }
   tick(); setInterval(tick, 1000);
   function maybeParty() {
-    if (Date.now() >= TARGET && !partyShown) { partyShown = true; confetti($('#confetti4'), 6000, 160); }
+    if (Date.now() >= TARGET && !partyShown) { partyShown = true; confetti($('#confetti5'), 6000, 160); }
   }
 
-  /* ---------- confeti ---------- */
+  /* ---------- confeti (azules y amarillos) ---------- */
   function confetti(cv, dur, n) {
     var r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
     cv.width = r.width * dpr; cv.height = r.height * dpr;
     var c = cv.getContext('2d'); c.scale(dpr, dpr);
-    var cols = ['#e3241b', '#ffd23f', '#1d5fa8', '#ffffff', '#ff8c00', '#43b047'];
+    var cols = ['#163AB0', '#FFD23F', '#667ECA', '#ffffff', '#e3241b', '#43b047'];
     var ps = [];
     for (var i = 0; i < n; i++) ps.push({ x: r.width * (0.2 + Math.random() * 0.6), y: r.height * 0.45, vx: (Math.random() - 0.5) * 9, vy: -Math.random() * 11 - 4,
       s: 5 + Math.random() * 6, a: Math.random() * 6.28, va: (Math.random() - 0.5) * 0.3, col: cols[i % cols.length] });
@@ -374,5 +349,7 @@
   }
 
   if (/[?&]debug=1/.test(location.search)) document.body.classList.add('debug');
+  var m = /[?&]p=(\d)/.exec(location.search);   // solo para revisión: ?p=3 abre directo la pantalla 3
+  if (m) { opened = true; layout(true); navLock = 0; goTo(+m[1] - 1, 'url'); }
   renderMute();
 })();
