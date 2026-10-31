@@ -141,3 +141,20 @@ img.char.fit-base{object-fit:contain;object-position:50% 100%}
 .clip>video::-webkit-media-controls,.clip>video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none}
 #s4 img.char.oculta,#s6 img.char.oculta{opacity:0}
 body.debug .clip{outline:2px dotted #d500f9}
+/* ---------- v13: pantalla 3 animada (capas sin toque + zonas táctiles; sin escala) ---------- */
+img.char.layer{pointer-events:none}
+img.char.layer.off{visibility:hidden}
+.hot.s3tap{border-radius:40%;z-index:5}
+.hot.s3tap:active{background:transparent}
+body.debug .hot.s3tap{outline-color:#ff6d00;background:rgba(255,109,0,.18)}
+.hot.s3tap.off{display:none}   /* zona de Lucas solo mientras se ve */
+
+/* v13 P3: cuadro con pila de fotos (solo se mueve la foto; marco y fondo quietos; sin escala) */
+.s3fotos{z-index:1;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none}
+.s3fotos:focus-visible{outline:3px solid #1e6fd9;outline-offset:-3px}
+.s3fotos img{position:absolute;left:12.4%;top:11.955%;width:75.2%;height:70.464%;object-fit:cover;display:block;pointer-events:none;
+  -webkit-user-drag:none;transform-origin:50% 100%;opacity:0;background:#f6ecdc}
+.s3fotos img.lista{opacity:1}
+.s3fotos img.pasa{box-shadow:0 calc(var(--pw)*.008) calc(var(--pw)*.02) rgba(0,0,0,.28)}
+body.debug .s3fotos{outline:3px dashed #aa00ff;background:rgba(170,0,255,.12)}
+img.layer.off{visibility:hidden}

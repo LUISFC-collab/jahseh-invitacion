@@ -19,7 +19,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="img/p1.webp" as="image">
 <link rel="preload" href="fonts/lilita-one-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="stylesheet" href="style.css?v=24">
 </head>
 <body>
 <div id="stage">
@@ -75,9 +75,36 @@
   </section>
 
   <!-- 3 · Invitación -->
+  <!-- v13: pantalla 3 animada (tiempos en app.js, objeto S3T). 0 s Lucas sale de detrás del marco y dice frase_15 (voz con 0,625 s de retardo)
+       → 4,083 s cae: golpe s3_lucas_caida.mp3 + polvo → se soba mirando a Bugs → 8,708 s se levanta y sale por la derecha (fin 11,25 s)
+       → 9,9 s Bugs se asoma por el borde izquierdo del marco, empuja la escalera (cae y rebota) y baja → 17,44 s bucle comiendo zanahoria.
+       Sin voz de Bugs. Después de la escena, tocar a Bugs = escena de pelota (bugs_pelota) y vuelve al bucle; los toques alternarán
+       Lucas/Bugs cuando exista el clip de pelota de Lucas (S3P.lucas en app.js). Sin escala («boing»).
+       Clips: /workspace/baby/anim/p3_lucas/ y /workspace/baby/anim/p3_bugs/ (solo WebP; los clips ya traen la máscara del marco). -->
   <section class="sec" id="s3" data-sound="" data-auto="0">
     <div class="page">
       <img class="bg" data-src="img/p3.webp" alt="¡Estás invitado! Te invito a celebrar mi primer añito" width="1080" height="1920">
+      <!-- v13: cuadro con fotos en pila. Toque/clic en el marco: la foto de arriba se desliza y gira un poco y pasa atrás; aparece la siguiente (en orden, cíclico).
+           Lista de fotos: anim/s3_fotos/lista.json (ver LEEME_fotos.txt). Las <img> las crea app.js (carga diferida: solo la actual y la siguiente).
+           Zona táctil = marco x290-790 y946-1657 (debajo de Lucas/Bugs y sus zonas, que tienen prioridad donde se tocan). -->
+      <div class="el s3fotos" id="s3Fotos" role="button" tabindex="0" aria-label="Pasar a la siguiente foto" style="--x:290;--y:946;--w:500;--h:711"></div>
+      <!-- capas animadas: no reciben toques (los toques van a las zonas .s3tap). Carga diferida: se descargan cuando la pantalla 2 está activa;
+           la pelota (s3_bugs_pelota_v9.webp) recién cuando termina la escena -->
+      <picture><source type="image/webp" data-srcset="anim/s3_escalera_despliegue.webp"><img class="el char layer off" id="s3Escalera" data-src="anim/s3_escalera_despliegue.webp" alt="" style="--x:0;--y:946;--w:300;--h:964;z-index:2"></picture>
+      <img class="el layer off" id="s3EscaleraFija" data-src="anim/s3_escalera.png" alt="" style="--x:0;--y:946;--w:300;--h:964;z-index:2">
+      <picture><source type="image/webp" data-srcset="anim/s3_bugs_escalera.webp"><img class="el char layer off" id="s3BugsEsc" data-src="anim/s3_bugs_escalera.webp" alt="Bugs" style="--x:0;--y:940;--w:300;--h:970;z-index:3"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s3_bugs_comer_loop.webp"><img class="el char layer off" id="s3BugsLoop" data-src="anim/s3_bugs_comer_loop.webp" alt="Bugs" style="--x:0;--y:1524;--w:245;--h:384;z-index:3"></picture>
+      <img class="el layer off" id="s3BugsPelota" data-lazy="anim/s3_bugs_pelota_v9.webp" alt="Bugs con la pelota" style="--x:0;--y:1524;--w:245;--h:384;z-index:3">
+      <!-- (va dentro de <picture> porque charUrl toma el <source> del padre) MODO TOQUE (S3L.toque en app.js): pies de Lucas asomando bajo el marco en espera hasta que los toquen.
+           Bucle B de v5_pies (la pieza A la crea app.js con S3L.toque.A). -->
+      <picture><source type="image/webp" data-srcset="anim/s3_lucas_pies_asoma.webp"><img class="el char layer off" id="s3LucasPiesA" data-src="anim/s3_lucas_pies_asoma.webp" alt="Pies del Pato Lucas asomando bajo el marco" style="--x:354.4;--y:1280;--w:342;--h:640;z-index:3"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s3_lucas_pies_bucle.webp"><img class="el char layer off" id="s3LucasPies" data-src="anim/s3_lucas_pies_bucle.webp" alt="Pies del Pato Lucas colgando bajo el marco" style="--x:354.4;--y:1280;--w:342;--h:640;z-index:3"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s3_lucas_caida_desde_pies.webp"><img class="el char layer off" id="s3Lucas" data-src="anim/s3_lucas_caida_desde_pies.webp" alt="Pato Lucas" style="--x:354.4;--y:1280;--w:342;--h:640;z-index:3"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s3_lucas_levanta_camina_v4.webp"><img class="el char layer off" id="s3Lucas2" data-src="anim/s3_lucas_levanta_camina_v4.webp" alt="Pato Lucas" style="--x:354.4;--y:1280;--w:725.5;--h:640;z-index:3"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s3_polvo_caida.webp"><img class="el char layer off" id="s3Polvo" data-src="anim/s3_polvo_caida.webp" alt="" style="--x:420;--y:1804;--w:260;--h:115;z-index:4"></picture>
+      <button type="button" class="hot s3tap off" id="tapPies" aria-label="Tocar los pies del Pato Lucas" style="--x:440;--y:1630;--w:200;--h:140"></button>
+      <button type="button" class="hot s3tap off" id="tapLucas" aria-label="Tocar al Pato Lucas" style="--x:802;--y:1546;--w:208;--h:366"></button>
+      <button type="button" class="hot s3tap" id="tapBugs" aria-label="Tocar a Bugs" style="--x:0;--y:1530;--w:250;--h:378"></button>
     </div>
   </section>
 
@@ -145,7 +172,7 @@
   </section>
 
   <!-- 8 · Cierre · Taz y Bugs -->
-  <section class="sec" id="s8" data-sound="s8_cierre" data-auto="1">
+  <section class="sec" id="s8" data-sound="s8_cierre" data-auto="1" data-auto-siempre="1" data-sync="s8porky">
     <div class="page">
       <img class="bg" data-src="img/p8.webp?v=19" alt="¡Eso es todo, amigos! ¡Gracias por acompañarme!" width="1080" height="1920">
       <img class="el btnimg" data-src="img/btn_volver.webp" alt="" style="--x:196;--y:956;--w:688;--h:178">
@@ -153,9 +180,9 @@
       <i class="sombra" style="--x:193.5;--y:1679;--w:191;--h:34"></i>
       <i class="sombra" style="--x:853.5;--y:1687.5;--w:95;--h:17"></i>
       <i class="sombra" style="--x:470;--y:1680;--w:250;--h:30"></i>
-      <picture><source type="image/webp" data-srcset="anim/s8_bugs.webp"><img class="el char" id="s8bugs" data-tap-ms="5000" data-src="anim/s8_bugs.gif?v=19" alt="Bugs" style="--x:728;--y:1134;--w:318;--h:572"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s8_bugs_12.webp"><img class="el char" id="s8bugs" data-tap-ms="5000" data-src="anim/s8_bugs.gif?v=19" alt="Bugs" style="--x:728;--y:1134;--w:318;--h:572"></picture>
       <picture><source type="image/webp" data-srcset="anim/s8_taz.webp"><img class="el char" id="s8taz" data-tap-ms="5000" data-src="anim/s8_taz.gif?v=19" alt="Taz" style="--x:34;--y:1234;--w:476;--h:482"></picture>
-      <picture><source type="image/webp" data-srcset="anim/s8_porky_vaquero.webp"><img class="el char" id="s8porky" data-tap-ms="2700" data-tap-sound="s8_porky" data-tap-webp="anim/s8_porky_vaquero_toque.webp" data-tap-gif="anim/s8_porky_vaquero_toque.gif?v=19" data-entry-lock-ms="3700" data-src="anim/s8_porky_vaquero.gif?v=19" alt="Baby Porky vaquero con su banjo" style="--x:403;--y:1272;--w:413;--h:434"></picture>
+      <picture><source type="image/webp" data-srcset="anim/s8_porky_vaquero_12.webp"><img class="el char" id="s8porky" data-tap-ms="2700" data-tap-sound="s8_porky" data-tap-webp="anim/s8_porky_vaquero_toque_12.webp" data-tap-gif="anim/s8_porky_vaquero_toque.gif?v=19" data-entry-lock-ms="3700" data-src="anim/s8_porky_vaquero.gif?v=19" alt="Baby Porky vaquero con su banjo" style="--x:403;--y:1272;--w:413;--h:434"></picture>
       <!-- zonas de toque de la pantalla 8 (cada bebé se anima solo); no tocan el texto ni el botón (y>1134) -->
       <button class="hot tap8" data-for="s8taz" aria-label="Tocar a Baby Taz" style="--x:40;--y:1240;--w:440;--h:470"></button>
       <button class="hot tap8" data-for="s8porky" aria-label="Tocar a Baby Porky" style="--x:480;--y:1278;--w:290;--h:425"></button>
@@ -204,7 +231,7 @@
   </div>
 </div>
 <canvas class="confetti" id="confettiTop"></canvas>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=25"></script>
 <script src="rsvp.js?v=10"></script>
 </body>
 </html>

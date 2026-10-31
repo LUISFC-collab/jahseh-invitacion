@@ -3,7 +3,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var stage = $('#stage');
-  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v12-ligero';
+  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v13-final';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
@@ -25,7 +25,14 @@
   var musicBase = MUSIC_INTRO, activeSfx = 0, sfxNodes = {};
   var AUDIO = {
     intro: 'audio/intro.mp3', fondo: 'audio/fondo.mp3', sobre: 'audio/sobre.mp3',
-    s1_piolin: 'audio/s1_piolin.mp3', s4_lucas: 'audio/s4_lucas.mp3', s5_taz: 'audio/s5_taz.mp3', s5_comer: 'audio/s5_taz_comer.mp3',
+    s1_piolin: 'audio/s1_piolin.mp3',
+    // v13: P3 Lucas frase_15 «¡Cuidado allá abajo, mi peludo amigo!» (doblaje latino original, U5ltngXeOQQ 66,02-68,85 s) y golpe de la caída (efecto, sin voz)
+    s3_lucas_f15: 'audio/s3_lucas_f15.mp3', s3_lucas_caida: 'audio/s3_lucas_caida.mp3',
+    // v13: P3 cuadro de fotos, pasar página (efecto sin voz, CC0: «10 Book Page Flips» de StarNinjas, OpenGameArt; ver creditos.txt)
+    s3_foto_pagina: 'audio/s3_foto_pagina.mp3',
+    // v13: P3 rebote de la pelota (sin voz, CC0: Kenney «Impact Sounds»; ver creditos.txt)
+    s3_pelota_rebote: 'audio/s3_pelota_rebote.mp3',
+    s4_lucas: 'audio/s4_lucas.mp3', s5_taz: 'audio/s5_taz.mp3', s5_comer: 'audio/s5_taz_comer.mp3',
     s5_ent: 'audio/s5_taz_entrada_der.mp3', s5_sal: 'audio/s5_taz_salida_remolino.mp3',
     s6_silvestre_a2: 'audio/s6_silvestre_a2.mp3',
     s7_lola: 'audio/s7_lola.mp3', s8_cierre: 'audio/s8_cierre_eso_es_todo_vaquero.mp3',
@@ -87,7 +94,10 @@
     var s = ctx.createBufferSource(); s.buffer = ctx.createBuffer(1, 1, 22050); s.connect(ctx.destination); s.start(0);
     unlocked = true;
     Object.keys(AUDIO).forEach(function (k) { if (!LAZY[k] || raw[k]) getBuffer(k).catch(function () {}); });
+    // v13: si se llegó a una pantalla con sonido de escena antes del primer toque, ese primer toque la arranca (imagen y voz juntas)
+    if (pendingAuto) { var ps = pendingAuto; pendingAuto = null; if (ps === current) syncEnter(ps); }
   }
+  var pendingAuto = null;
 
   var musicStarted = false, loopSrc = null;
   function startMusic() {
@@ -116,8 +126,11 @@
   }
   /* offset (s): empieza el sonido más adentro (para calzarlo con un video ya en marcha, portada Piolín f04);
      dur (s): toca solo un tramo [offset, offset+dur] con un fundido de 30 ms al final (pantalla 5, Taz) */
-  function playSfx(k, gain, offset, dur) {
+  /* enPerf (opcional, v13 P3): instante exacto en reloj performance.now() en que debe empezar a sonar (se agenda en el reloj
+     del AudioContext, sin depender de la precisión de setTimeout). */
+  function playSfx(k, gain, offset, dur, enPerf) {
     if (!ctx || !unlocked) return Promise.resolve(false);
+    if (ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }   // reintenta reanudar antes de cada sonido
     return getBuffer(k).then(function (b) {
       Object.keys(sfxNodes).forEach(function (o) {
         if (o === k || (k !== 'sobre' && o !== 'sobre')) { // un personaje a la vez
@@ -131,9 +144,11 @@
       if (dur) { var te = ctx.currentTime + dur; g.gain.setValueAtTime(gv, Math.max(ctx.currentTime, te - 0.03)); g.gain.linearRampToValueAtTime(0, te); }
       sfxNodes[k] = s; activeSfx++; setMusicLevel(0.2);
       s.onended = function () { if (sfxNodes[k] === s) delete sfxNodes[k]; activeSfx = Math.max(0, activeSfx - 1); setMusicLevel(0.6); };
-      if (dur) s.start(0, offset, dur); else s.start(0, offset);
+      var ahora = performance.now(), espera = enPerf ? Math.max(0, (enPerf - ahora) / 1000) : 0, cuando = espera ? ctx.currentTime + espera : 0;
+      if (dur) s.start(cuando, offset, dur); else s.start(cuando, offset);
       window.__jahsehAudio.plays.push(k);
-      window.__jahsehAudio.at.push({ k: k, off: offset, dur: dur || (b.duration - offset), t: performance.now() });
+      window.__jahsehAudio.at.push({ k: k, off: offset, dur: dur || (b.duration - offset), t: ahora + espera * 1000, pedido: enPerf || null,
+        ctxEstado: ctx.state, latencia: Math.round(((ctx.outputLatency || 0) + (ctx.baseLatency || 0)) * 1000) });
       log('sfx ' + k + (offset ? ' +' + offset.toFixed(3) : ''));
       return dur || (b.duration - offset) || true;   // duración en s (para no pisar el sonido en curso)
     }).catch(function () { return false; });
@@ -158,6 +173,13 @@
     muted = !muted; renderMute();
     if (!ctx) { unlock(); }
     if (ctx) { master.gain.setTargetAtTime(muted ? 0 : 1, ctx.currentTime, 0.05); if (!muted && ctx.state !== 'running') ctx.resume(); }
+  });
+  /* v13: el primer gesto del usuario (incluido el deslizamiento que entra a una pantalla) crea/reanuda el AudioContext */
+  ['touchend', 'pointerup', 'click', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, function () {
+      if (!AC) return;
+      if (!unlocked) unlock(); else if (ctx && ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }
+    }, true);
   });
   document.addEventListener('visibilitychange', function () {
     if (!ctx) return;
@@ -199,18 +221,30 @@
       }
       return blobs[url].then(function (b) {
         if (!b) { if (!im.src) im.src = url; return; }
-        if (!im._loaded) { im._loaded = true; im._blob = b; restartImg(im); }
-        if (im.hasAttribute('data-tap-webp')) loadTapBlob(im);
-        if (im.id === 'lola7') preloadLola();
+        if (!im._loaded) { im._loaded = true; im._blob = b; if (isSync(im)) prepImg(im); else restartImg(im); }
+        if (im.id === 'lola7') s8Primero(preloadLola);   // v13: primero lo principal de la pantalla 8, después las 4 animaciones de Lola
         if (im.hasAttribute('data-rota')) rotaPreload(im);
       });
     }));
   }
+  /* v13 (pantalla 8): la URL del próximo arranque se crea y decodifica antes (mientras se ve la pantalla 7),
+     así al entrar el primer cuadro ya está listo y la animación arranca desde el cuadro 0 sin espera */
+  function isSync(im) { var sec = im.closest('.sec'); return !!(sec && sec.hasAttribute('data-sync')); }
+  function prepImg(im) {
+    if (!im._blob || im._prep) return;
+    im._prep = URL.createObjectURL(im._blob);
+    var pi = new Image(); pi.src = im._prep; im._prepImg = pi;
+    im._prepDec = (pi.decode ? pi.decode() : Promise.resolve()).catch(function () {});
+    var t = performance.now(); im._prepDec.then(function () { PERF.push(im.id + ' decode ' + Math.round(performance.now() - t) + 'ms'); });
+  }
+  function prepSec(sec) { $$('#' + sec.id + ' img.char').forEach(function (im) { if (im._loaded) prepImg(im); }); }
+  var PERF = window.__jahsehPerf = [];
   function restartImg(im, blob) {
+    var prep = !blob && im._prep; if (prep) { im._prep = null; im._prepImg = null; }
     blob = blob || im._blob;
     if (!blob) return;
     im._restarts = (im._restarts || 0) + 1;
-    var old = im._url; im._url = URL.createObjectURL(blob); im.src = im._url;
+    var old = im._url; im._url = prep || URL.createObjectURL(blob); im.src = im._url;
     if (old) setTimeout(function () { URL.revokeObjectURL(old); }, 2000);
     // data-rest (de site_v9_tap_p6): animación de una pasada (Silvestre a2 habla una vez); al terminar queda en su cuadro de reposo
     var rest = im.getAttribute('data-rest');
@@ -412,6 +446,13 @@
         .catch(function (e) { log('img error ' + url + ' ' + e); return null; });
     }
     return blobs[url];
+  }
+  var s8Pre = null;
+  function s8Primero(cb) {
+    var s8 = $('#s8');
+    if (!s8) { cb(); return; }
+    if (!s8Pre) { loadBg(s8); s8Pre = Promise.race([loadChars(s8), new Promise(function (r) { setTimeout(r, 8000); })]); }
+    s8Pre.then(function () { cb(); });
   }
   function preloadLola() {             // solo cuando la pantalla 7 está cerca (loadChars de p7)
     if (!WEBP || lolaPre) return;
@@ -672,25 +713,61 @@
     navLock = now + NAV_MS;
     if (F04) F04.reset();
     rotaReset();
-    stopSfx(); t5Stop();
+    stopSfx(); t5Stop(); s3Clear();
+    if (ctx && unlocked && !muted && ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }   // v13: dentro del gesto (iOS)
+    if (pendingAuto && pendingAuto !== sections[i]) pendingAuto = null;
     idx = i; current = sections[i];
     window.__jahsehNav.navs.push((why || '') + '>' + (i + 1));
     loadBg(current); loadChars(current); loadFotos(current);
-    if (sections[i + 1]) { loadBg(sections[i + 1]); loadChars(sections[i + 1]); loadFotos(sections[i + 1]); }
+    precargaSig(i);
+    if (sections[i + 1] && sections[i + 1].hasAttribute('data-sync')) prepSec(sections[i + 1]);   // v13: re-entrada a la 8
     layout(false);
     onSectionVisible(current);
     return true;
+  }
+  /* v13 final · peso: la escena de la pantalla 3 (~5 MB) ya no compite con la pantalla 2. Se precarga recién cuando la 2 terminó
+     de bajar lo suyo (personajes, fondo y videos de las fotos) y el navegador queda libre (idle), o como tarde a los S3_PRE_MAX_MS.
+     Si el invitado llega a la 3 antes, goTo la carga en el momento (como cualquier pantalla actual). Las demás pantallas siguen igual. */
+  var S3_PRE_MAX_MS = 8000;
+  function cargaPropia(sec) {
+    var tope = function (p, ms) { return Promise.race([p, new Promise(function (r) { setTimeout(r, ms); })]); };
+    var imgs = $$('#' + sec.id + ' img:not(.char)').filter(function (im) { return im.getAttribute('src') && !im.complete; }).map(function (im) {
+      return new Promise(function (r) { im.addEventListener('load', r, { once: true }); im.addEventListener('error', r, { once: true }); });
+    });
+    var vids = $$('#' + sec.id + ' video.foto').filter(function (v) { return v.getAttribute('src') && v.readyState < 4 && !v.error; }).map(function (v) {
+      return new Promise(function (r) { v.addEventListener('canplaythrough', r, { once: true }); v.addEventListener('error', r, { once: true }); });
+    });
+    return tope(Promise.all([loadChars(sec)].concat(imgs, vids)), S3_PRE_MAX_MS);
+  }
+  function precargaSig(i) {
+    var n = sections[i + 1];
+    if (!n) return;
+    var go = function () { loadBg(n); loadChars(n); loadFotos(n); if (n === s3) s3FotosInit(); };
+    if (n !== s3 || n._precargada) { if (n === s3) go(); else { loadBg(n); loadChars(n); loadFotos(n); } return; }
+    var cur = sections[i], t0 = performance.now(), hecho = false;
+    var run = function (por) {
+      if (hecho) return; hecho = true; n._precargada = true;
+      PERF.push('s3 precarga ' + por + ' ' + Math.round(performance.now() - t0)); log('s3 precarga (' + por + ')');
+      go();
+    };
+    cargaPropia(cur).then(function () {
+      if (window.requestIdleCallback) requestIdleCallback(function () { run('idle'); }, { timeout: 1500 });
+      else setTimeout(function () { run('idle'); }, 300);
+    });
+    setTimeout(function () { run('tope'); }, S3_PRE_MAX_MS + 2000);
   }
   function next(why) { return goTo(idx + 1, why || 'next'); }
   function prev(why) { return goTo(idx - 1, why || 'prev'); }
 
   function onSectionVisible(sec) {
+    if (sec.hasAttribute('data-sync')) { syncEnter(sec); playFotos(sec); return; }   // v13: pantalla 8
     // cada pantalla reinicia su animación al entrar; el sonido suena una vez (solo después del primer toque)
     loadChars(sec).then(function () {
       if (current !== sec) return;
       if (sec.id === 's7') lolaReset();
       restartSection(sec); lockSec(sec); rotaEnter(sec);
       if (sec.id === 's5') t5Intro();
+      if (sec === s3) s3Intro();
       var k = sec.getAttribute('data-sound');
       var auto = unlocked && k && sec.getAttribute('data-auto') === '1' && !played[sec.id];
       $$('#' + sec.id + ' img.char[data-tap-ms]').forEach(function (im) {
@@ -700,10 +777,67 @@
       if (auto) { played[sec.id] = true; playSfx(k); }
     });
     playFotos(sec);
+    if (sec === s3 || sec.id === 's4') s3FotosInit();   // v13 P3: cuadro de fotos (desde la 2 lo prepara precargaSig, diferido)   // v13 P3: cuadro de fotos (se prepara desde la vecina)
     if (sec.id === 's5') maybeParty();
   }
 
-  var NO_NAV = '.hot, a, button, img.char, #muteBtn, #againBtn';
+  /* v13 · pantalla 8 (cierre): la voz «¡Eso es todo, amigos!» y la animación de Porky (data-sync) arrancan juntas en cuanto
+     Porky y el sonido están decodificados. Taz y Bugs arrancan cada uno apenas está listo: ya no se espera a los tres.
+     Si Porky tarda más de SYNC_MAX_MS, la voz suena igual (que nunca falte el audio). Suena en cada entrada (data-auto-siempre).
+     El _toque de Porky se baja después (TOQUE_MS) o al primer toque. */
+  var SYNC_MAX_MS = 2500, TOQUE_MS = 3000, syncRun = 0;
+  function charBlob(im) {
+    return webpReady.then(function () { var u = charUrl(im); if (!blobs[u]) loadChars2(im.closest('.sec')); return blobs[u]; });
+  }
+  function syncEnter(sec) {
+    var run = ++syncRun, t0 = performance.now();
+    var lead = document.getElementById(sec.getAttribute('data-sync'));
+    var k = sec.getAttribute('data-sound');
+    var always = sec.hasAttribute('data-auto-siempre');
+    var auto = !!k && sec.getAttribute('data-auto') === '1' && (always || !played[sec.id]);
+    var alive = function () { return run === syncRun && current === sec; };
+    var chars = $$('#' + sec.id + ' img.char');
+    chars.forEach(function (im) {
+      im._busyUntil = auto && im.hasAttribute('data-entry-lock-ms') ? Date.now() + (+im.getAttribute('data-entry-lock-ms')) : 0;
+    });
+    if (auto && !unlocked) pendingAuto = sec;   // sin gesto todavía: el primer toque la arranca (unlock → syncEnter)
+    var started = false, leadOn = false;
+    chars.forEach(function (im) {
+      if (im === lead) return;
+      charBlob(im).then(function (b) { if (b && alive()) { restartImg(im); PERF.push(im.id + ' on ' + Math.round(performance.now() - t0)); } });
+    });
+    var leadReady = charBlob(lead).then(function (b) { return b ? (lead._prepDec || Promise.resolve()) : null; });
+    var sndReady = auto && unlocked ? getBuffer(k).catch(function () { return null; }) : Promise.resolve(null);
+    function start(withLead) {
+      if (started || !alive()) return; started = true;
+      if (withLead) { restartImg(lead); leadOn = true; }
+      var go = function () {
+        if (!alive()) return;
+        PERF.push('sync ' + (withLead ? 'porky+voz' : 'voz sola') + ' ' + Math.round(performance.now() - t0));
+        if (auto && unlocked) {
+          played[sec.id] = true; playSfx(k);
+          if (lead.hasAttribute('data-entry-lock-ms')) lead._busyUntil = Date.now() + (+lead.getAttribute('data-entry-lock-ms'));
+        }
+        setTimeout(function () { if (current === sec) loadTapBlob(lead); }, TOQUE_MS);
+      };
+      if (withLead && lead.decode) Promise.race([lead.decode().catch(function () {}), new Promise(function (r) { setTimeout(r, 300); })])
+        .then(function () { requestAnimationFrame(go); });
+      else go();
+    }
+    Promise.all([leadReady, sndReady]).then(function (r) {
+      if (!alive()) return;
+      if (r[0] === null) { start(false); if (!lead.src) lead.src = charUrl(lead); return; }
+      if (!started) start(true);
+      else if (!leadOn) { restartImg(lead); leadOn = true; PERF.push('porky tarde ' + Math.round(performance.now() - t0)); }
+    });
+    setTimeout(function () { if (alive() && !started) start(false); }, SYNC_MAX_MS);
+  }
+  // v13: primer gesto en una pantalla con sonido pendiente (se abrió sin tocar antes, p. ej. ?p=8)
+  ['touchend', 'click'].forEach(function (ev) {
+    document.addEventListener(ev, function () { if (pendingAuto && !unlocked) unlock(); }, true);
+  });
+
+  var NO_NAV = '.hot, a, button, img.char, #muteBtn, #againBtn, .s3fotos';
   /* pantallas con data-lock-ms (4 Lucas, 5 Taz, 6 Silvestre, 7 Lola): mientras dura una pasada de su
      animación o su sonido, un nuevo toque se ignora; al terminar, el toque la reinicia desde el cuadro 0 con su sonido.
      Sin efecto «boing» (escala): no se deforma a ningún personaje. */
@@ -729,6 +863,7 @@
     im.addEventListener('contextmenu', function (e) { e.preventDefault(); });
     im.addEventListener('animationend', function () { im.classList.remove('salto'); });
     if (im.classList.contains('p2c')) return;   // la portada usa sus propias zonas táctiles (abajo)
+    if (im.classList.contains('layer')) return; // v13 P3: capas sin toque (lo reciben #tapLucas / #tapBugs)
     bindTap(im, function () {
       if (Date.now() < swallowClick) return;    // fue un deslizamiento, no un toque
       if (im.closest('#s1')) { p1Tap(); return; } // P1: Piolín ya no abre el sobre (ver bloque «P1: toque Piolín»)
@@ -873,6 +1008,361 @@
     // los tramos ya están descargados (t5Preload al entrar a la pantalla): cada cambio solo espera a decodificar el cuadro 0
     paso('entrada', function () { paso('comer', function () { paso('salida', t5ToAsoma); }); });
   }
+
+  /* ---------- v13: pantalla 3 — escena de Lucas y Bugs (clips finales) ----------
+     MODO TOQUE (S3L.toque, más abajo): al entrar solo asoman los pies de Lucas (A) y quedan colgando en bucle (B) hasta que
+     los tocan; recién entonces: voz → caída C → camina → reposo, y Bugs + escalera arrancan 1117 ms después del impacto.
+     Tiempos en ms. LUCAS: anclados al cuadro 0 del clip C (s3LucasDesde, primer pintado = reloj de la animación);
+       IMPACTO a C+625 (impactoDesde): golpe s3_lucas_caida.mp3 (su golpe está a 1,208 s del archivo: se toca desde golpeOff,
+       agendado en el reloj del AudioContext) + polvo (su WebP trae 1208 ms vacíos: arranca 583 ms antes de C, todavía con B);
+       clip 2 s3_lucas_levanta_camina_v4.webp (caja ancha x354.4 725.5x640, 3750 ms) a C+5250, sin corte; a C+9000 reposo en bucle.
+     BUGS (/workspace/baby/anim/p3_bugs/posiciones.json): arrancan juntos s3_bugs_escalera.webp (7542 ms) y
+       s3_escalera_despliegue.webp (2375 ms; al terminar se cambia por s3_escalera.png, que queda); a +7542 pasa a
+       s3_bugs_comer_loop (su cuadro 0 = último del clip). Sin voz de Bugs.
+     Un solo sonido a la vez (playSfx): la voz termina antes de que empiece C (y del golpe). */
+  var S3T = window.__jahsehS3T = {
+    lucasAt: 0, vozDesde: 625, impactoDesde: 4083, golpeOff: 1.158, polvoLead: 1208, lucas1Ms: 8708, lucas2Ms: 3750,
+    bugsAt: 9900, bugsMs: 7542, escaleraMs: 2375, margen: 100
+  };
+  /* PELOTAS (después de la escena): turno GLOBAL que alterna Lucas, Bugs, Lucas, Bugs…
+     Cualquier toque en la zona de Lucas o en la de Bugs lanza la pelota de A QUIEN LE TOCA (si tocan al que no le toca,
+     igual sale la del turno actual) y pasa el turno al otro. Si la del turno aún no descargó, sale la del otro (si ya está).
+     contactos = ms del clip en que la pelota toca el piso (suena s3_pelota_rebote en cada uno, un solo sonido a la vez).
+     Lucas: el clip entra desde la derecha y sale por la derecha (primer y último cuadro vacíos), caja x738 y1280 342x640.
+     Tras la escena su zona táctil queda donde estaba él (zonaLucasFin), aunque esté fuera de pantalla.
+     Para cambiar un clip: src/ms/contactos aquí. Bugs = pelota_v9 (última pedida por Luis). */
+  var S3P = window.__jahsehS3P = {
+    bugs: { src: 'anim/s3_bugs_pelota_v9.webp', ms: 4625, contactos: [958.3, 1791.7, 2875, 3708.3] },  // /workspace/baby/anim/p3_bugs/pelota_v9/ (última pedida por Luis; mismos 4625 ms y contactos que v3/v8)
+    lucas: null,   // lo pone S3L (modo 'parado'): lucas_pelota_parado
+    zonaLucasFin: [802, 1546, 208, 366],   // x, y, w, h (lienzo 1080x1920): caja de tinta de Lucas en reposo (x802..1010, y1546..1912)
+    turno: 0, escenas: [], sonido: 's3_pelota_rebote'
+  };
+  /* LUCAS con 4 estados (piezas v3 «centro» + v2 «parado» de /workspace/baby/anim/p3_lucas/):
+     1 sale del CENTRO del marco y cae vertical bajo x=540 (s3_lucas_salida_caida_centro, caja x354.4 y1280 342x640, 8708 ms)
+     → 2 se levanta y camina a su reposo x≈910 (s3_lucas_levanta_camina_centro, caja ancha x354.4 725.5x640, 3750 ms)
+     → 3 reposo en bucle (s3_lucas_reposo_loop, x738) → 4 pelota al tocarlo (s3_lucas_pelota_parado, x738, 7208 ms) → 3.
+     Las capas no reciben toques (pointer-events:none); la zona táctil de Lucas (#tapLucas = caja de reposo x802 y1546 w208 h366)
+     existe solo desde que queda en reposo. Los cambios de pieza se encadenan sin corte (s3Enlaza).
+     modo 'sale' = versión anterior (Lucas salía por la derecha); sus clips ya NO están en el sitio.
+     Para cambiar una pieza: reemplazar el archivo en anim/ y poner clip2Ms / pelota.ms / pelota.contactos de su posiciones.json. */
+  var S3L = window.__jahsehS3L = {
+    modo: 'parado',   // clip2 de v4_detras (caminata corregida); reposo y pelota de v2_parado (aprobadas)
+    parado: { clip2: 'anim/s3_lucas_levanta_camina_v4.webp', clip2Ms: 3750, reposo: 'anim/s3_lucas_reposo_loop.webp',
+              pelota: { src: 'anim/s3_lucas_pelota_parado.webp', ms: 7208, contactos: [1625, 2417, 2792, 3208] } }
+  };
+  /* MODO TOQUE (cambio de Luis, 31-oct): Lucas NO cae solo. Al entrar a la pantalla 3 se ve la pieza A (los pies asoman bajo
+     el borde inferior del marco) y luego el bucle B (pies colgando) INDEFINIDAMENTE. Bugs y la escalera no se ven todavía.
+     Solo al TOCAR los pies (#tapPies, zona invisible, activa únicamente con B corriendo y sin otra animación):
+     voz frase_15 → al terminar la voz, en el siguiente ciclo completo de B, clip C (caída desde los pies) anclado a su primer
+     pintado → golpe s3_lucas_caida en C+impactoMs (reloj del AudioContext) → se frota → camina (clip2) → reposo → pelotas.
+     Bugs (y la escalera) arrancan bugsTrasImpacto ms después del impacto. Volver a la pantalla o recargar = estado inicial.
+     activo:false = modo anterior por tiempo (Lucas cae solo al entrar; voz a +625).
+     Piezas v5_pies (/workspace/baby/anim/p3_lucas/v5_pies/, lienzo 342x640 en x354.4 y1280, 24 fps):
+       A asoma 625 ms (su último cuadro = B[0]: B entra 42 ms antes del final de A, así sigue «desde el cuadro 1» sin repetir);
+       B bucle 1250 ms (30 cuadros únicos; en anim/ se quitó la entrada final repetida y se puso bucle infinito, sin tocar píxeles);
+       C caída 5250 ms, impacto a 625 ms (cuadro 15); C[0] = B[0], así que C entra justo cuando B vuelve a su cuadro 0. */
+  S3L.toque = {
+    activo: true,   // true = modo toque (aprobado). false = modo anterior por tiempo (legado: necesitaba el clip v4 de 8708 ms, ya retirado)
+    A: { src: 'anim/s3_lucas_pies_asoma.webp', ms: 625, ultimoMs: 42 },   // asomo, 1 vez; ultimoMs = duración de su último cuadro (= B[0])
+    B: { src: 'anim/s3_lucas_pies_bucle.webp', cicloMs: 1250 },          // bucle de espera; C entra en un múltiplo de cicloMs
+    C: { src: 'anim/s3_lucas_caida_desde_pies.webp', ms: 5250, impactoMs: 625 },
+    zona: [400, 1630, 290, 110],                                    // x, y, w, h (1080x1920): zona táctil de los pies (x400–690, y1630–1740)
+    vozMsSiFalla: 2873,                                             // duración de frase_15 si el audio no está disponible
+    bugsTrasImpacto: 1117                                           // Bugs arranca 1117 ms después del impacto
+  };
+  if (S3L.modo === 'parado') {
+    S3T.lucas2Ms = S3L.parado.clip2Ms; S3P.lucas = S3L.parado.pelota;
+    var c2 = document.getElementById('s3Lucas2'); if (c2) { c2.setAttribute('data-src', S3L.parado.clip2); var so = c2.parentNode.querySelector('source'); if (so) so.setAttribute('data-srcset', S3L.parado.clip2); }
+  }
+  var s3 = $('#s3'), s3T = [];
+  var S3 = { lucas: $('#s3Lucas'), lucas2: $('#s3Lucas2'), polvo: $('#s3Polvo'), esc: $('#s3Escalera'), escFija: $('#s3EscaleraFija'),
+             bugsEsc: $('#s3BugsEsc'), loop: $('#s3BugsLoop'), pelotaB: $('#s3BugsPelota'), pelotaL: null,
+             tapLucas: $('#tapLucas'), tapBugs: $('#tapBugs'), reposo: null, pies: $('#s3LucasPies'), piesA: $('#s3LucasPiesA'), tapPies: $('#tapPies') };
+  function s3Toque() { return !!(S3L.toque && S3L.toque.activo && S3.pies && S3.tapPies); }
+  if (s3Toque()) {
+    var zp = S3L.toque.zona; S3.tapPies.setAttribute('style', '--x:' + zp[0] + ';--y:' + zp[1] + ';--w:' + zp[2] + ';--h:' + zp[3]);
+    if (S3L.toque.B && S3L.toque.B.src) { S3.pies.setAttribute('data-src', S3L.toque.B.src); var sp = S3.pies.parentNode.tagName === 'PICTURE' && S3.pies.parentNode.querySelector('source'); if (sp) sp.setAttribute('data-srcset', S3L.toque.B.src); }
+    if (S3L.toque.C.src) { S3.lucas.setAttribute('data-src', S3L.toque.C.src); var sc = S3.lucas.parentNode.querySelector('source'); if (sc) sc.setAttribute('data-srcset', S3L.toque.C.src); }
+    S3T.lucas1Ms = S3L.toque.C.ms; S3T.impactoDesde = S3L.toque.C.impactoMs;
+  }
+  function s3Parado() { return S3L.modo === 'parado'; }
+  function s3CapaLucas(id, alt) {   // capa extra de Lucas en la misma caja que sus clips (se crea solo si se usa)
+    var im = document.createElement('img');
+    im.className = 'el layer off'; im.id = id; im.alt = alt;
+    im.setAttribute('style', '--x:738;--y:1280;--w:342;--h:640;z-index:3');
+    S3.lucas.closest('.page').appendChild(im); return im;
+  }
+  var s3Estado = { fin: false, lucasVis: false, lucas: '' };   // lucas: '' | asomo | espera | voz | cae | reposo
+  window.__jahsehTap = { busy: function (id) { return Math.max(0, (lockUntil[id] || 0) - Date.now()); }, ignored: [], ev: [], estado: s3Estado };
+  function s3Ev(e) { window.__jahsehTap.ev.push({ ev: e, t: Date.now() }); log('s3 ' + e); }
+  function s3Clear() { s3T.forEach(clearTimeout); s3T = []; }
+  function s3At(ms, fn) { s3T.push(setTimeout(function () { if (current === s3) fn(); }, Math.max(0, ms))); }
+  function s3Show(im, on) { if (im) im.classList.toggle('off', !on); }
+  function s3LucasVis(on) { s3Estado.lucasVis = on; s3Show(S3.tapLucas, on || s3Estado.fin); }
+  var S3_ZL0 = S3.tapLucas ? S3.tapLucas.getAttribute('style') : '';
+  function s3ZonaLucas(fin) {   // zona de Lucas: la de la escena o, tras la escena, la de su pelota (existe aunque él esté fuera)
+    if (!S3.tapLucas) return;
+    var z = S3P.zonaLucasFin;
+    S3.tapLucas.setAttribute('style', fin && (S3P.lucas || s3Parado()) ? '--x:' + z[0] + ';--y:' + z[1] + ';--w:' + z[2] + ';--h:' + z[3] : S3_ZL0);
+  }
+  // reinicia «im» desde su cuadro 0 y, cuando ya decodificó, oculta «antes» (encadenado sin corte visible)
+  function s3Enlaza(im, antes, cb) {
+    var hecho = false;
+    function swap() { if (hecho) return; hecho = true; s3Show(im, true); if (antes && antes !== im) s3Show(antes, false); if (cb) cb(); }
+    im.onload = function () { im.onload = null; swap(); };
+    restartImg(im);
+    setTimeout(swap, 250);   // por si el load no llega (blob ya decodificado)
+  }
+  /* parte de Lucas (t0 = desde cuándo contar). Todo se ancla al RELOJ DE LA ANIMACIÓN: el clip 1 arranca en su cuadro 0 al
+     pintarse por primera vez (onload del blob nuevo + primer requestAnimationFrame) y desde ese instante (S3.anclaLucas)
+     se agendan voz, golpe (en el reloj del AudioContext, ver playSfx enPerf), polvo, clip 2 y reposo. */
+  function s3Lucas(t0, sonido, golpe) {
+    var L = S3T.lucasAt - t0;
+    s3Show(S3.lucas, false); s3Show(S3.lucas2, false); if (!S3.polvoYa) s3Show(S3.polvo, false); s3Show(S3.reposo, false); s3LucasVis(false);
+    if (s3Parado()) { if (!S3.reposo) S3.reposo = s3CapaLucas('s3LucasReposo', 'Pato Lucas parado'); s3PelotaCarga(S3.reposo, S3L.parado.reposo); }
+    s3At(L, function () {
+      var hecho = false, im = S3.lucas;
+      function ancla() {
+        if (hecho) return; hecho = true;
+        requestAnimationFrame(function (tf) { s3Show(S3.pies, false); s3Show(S3.piesA, false); s3LucasDesde(Math.max(tf, performance.now() - 16), sonido, golpe === undefined ? sonido : golpe); });
+      }
+      im.onload = function () { im.onload = null; ancla(); };
+      restartImg(im); s3Show(im, true); if (!s3Parado()) s3LucasVis(true);
+      s3At(300, ancla);   // por si el load no llega
+    });
+  }
+  function s3LucasDesde(a, sonido, golpe) {   // a = performance.now() del cuadro 0 del clip 1 (en modo toque: clip C)
+    S3.anclaLucas = a; s3Ev('lucas'); window.__jahsehTap.anclaLucas = a;
+    function en(ms, fn) { s3At(a + ms - performance.now(), fn); }
+    var golpeEn = S3T.impactoDesde - Math.round((1.208 - S3T.golpeOff) * 1000);   // el golpe del mp3 está a 1,208 s
+    if (sonido) {   // modo por tiempo: la voz va dentro del clip
+      en(S3T.vozDesde - 200, function () { playSfx('s3_lucas_f15', 1, 0, 0, a + S3T.vozDesde); });
+      en(S3T.vozDesde, function () { s3Ev('voz'); });
+    }
+    if (golpe) en(golpeEn - 200, function () { playSfx('s3_lucas_caida', 1, S3T.golpeOff, 0, a + golpeEn); });
+    if (s3Toque()) {   // Bugs y la escalera arrancan recién después del impacto
+      en(S3T.impactoDesde + S3L.toque.bugsTrasImpacto, function () { s3Bugs(S3T.bugsAt, true); });
+      lockUntil.s3 = Date.now() + Math.max(S3T.lucas1Ms + S3T.lucas2Ms, S3T.impactoDesde + S3L.toque.bugsTrasImpacto + S3T.bugsMs) + S3T.margen + (a - performance.now());
+    }
+    if (S3.polvoYa) S3.polvoYa = false; else en(S3T.impactoDesde - S3T.polvoLead, function () { restartImg(S3.polvo); s3Show(S3.polvo, true); });
+    en(golpeEn, function () { s3Ev('impacto'); });
+    en(S3T.lucas1Ms, function () { s3Enlaza(S3.lucas2, S3.lucas); s3Ev('lucas2'); });
+    if (s3Parado()) en(S3T.lucas1Ms + S3T.lucas2Ms, function () {   // se queda parado: reposo en bucle; recién ahora existe su zona
+      if (S3.reposo && S3.reposo._blob) s3Enlaza(S3.reposo, S3.lucas2);   // si el bucle aún no bajó, queda el último cuadro del clip2 (misma pose)
+      s3Show(S3.polvo, false); s3ZonaLucas(true); s3LucasVis(true); s3Estado.lucas = 'reposo'; s3Ev('lucasReposo');
+    });
+    else en(S3T.lucas1Ms + S3T.lucas2Ms, function () { s3Show(S3.lucas2, false); s3Show(S3.polvo, false); s3LucasVis(false); s3Ev('lucasFuera'); });
+  }
+  // parte de Bugs: asomo + escalera + bajada (escalera: true = también cae la escalera)
+  function s3Bugs(t0, escalera) {
+    var B = S3T.bugsAt - t0;
+    s3Show(S3.bugsEsc, false);
+    if (escalera) { s3Show(S3.esc, false); s3Show(S3.escFija, false); s3Show(S3.loop, false); }
+    s3At(B, function () {
+      if (escalera) { restartImg(S3.esc); s3Show(S3.esc, true); }
+      s3Show(S3.loop, false); s3Show(S3.pelotaB, false);
+      restartImg(S3.bugsEsc); s3Show(S3.bugsEsc, true); s3Ev('bugs');
+    });
+    if (escalera) s3At(B + S3T.escaleraMs, function () { s3Show(S3.escFija, true); s3Show(S3.esc, false); s3Ev('escaleraFija'); });
+    s3At(B + S3T.bugsMs, function () { s3Enlaza(S3.loop, S3.bugsEsc, function () { s3Fin(); }); s3Ev('bucle'); });
+  }
+  function s3Fin() { s3Estado.fin = true; s3Show(S3.tapBugs, true); s3ZonaLucas(true); if (S3P.lucas) s3Show(S3.tapLucas, true); s3PelotaPrecarga(); if (window.__jahsehFotos && window.__jahsehFotos.a) s3FotoAnim(); }
+  function s3Intro() {
+    s3Clear();
+    var sonido = !played.s3; played.s3 = true;   // suena la primera vez (playSfx reanuda el AudioContext si hace falta)
+    s3Estado.fin = false; s3ZonaLucas(false); S3P.turno = 0;
+    lockUntil.s3 = Date.now() + Math.max(S3T.lucasAt + S3T.lucas1Ms + S3T.lucas2Ms, S3T.bugsAt + S3T.bugsMs) + S3T.margen;
+    s3Show(S3.pelotaB, false); if (S3.pelotaL) s3Show(S3.pelotaL, false);
+    s3Ev('intro');
+    if (s3Toque()) { s3IntroToque(); return; }
+    s3Lucas(0, sonido); s3Bugs(0, true);
+  }
+  /* modo toque: estado inicial = pies en espera (A → B en bucle), sin Bugs ni escalera, sin límite de tiempo */
+  function s3IntroToque() {
+    var T = S3L.toque;
+    [S3.lucas, S3.lucas2, S3.polvo, S3.reposo, S3.esc, S3.escFija, S3.bugsEsc, S3.loop, S3.pelotaB, S3.pelotaL].forEach(function (im) { s3Show(im, false); });
+    s3Show(S3.tapLucas, false); s3Show(S3.tapBugs, false); s3Show(S3.tapPies, false); s3Estado.lucasVis = false;
+    if (S3L.modo === 'parado') { if (!S3.reposo) S3.reposo = s3CapaLucas('s3LucasReposo', 'Pato Lucas parado'); s3PelotaCarga(S3.reposo, S3L.parado.reposo); }
+    S3.anclaLucas = 0; window.__jahsehTap.anclaLucas = 0; S3.polvoYa = false; s3Show(S3.piesA, false); s3Show(S3.pies, false);
+    function espera() {   // bucle B: la zona de los pies existe solo ahora; esperaDesde = primer pintado de B[0] (reloj del bucle)
+      s3Estado.lucas = 'espera'; lockUntil.s3 = 0; S3.esperaDesde = performance.now();
+      var im = S3.pies, ok = false;
+      function pinta() { if (ok) return; ok = true; requestAnimationFrame(function (tf) { S3.esperaDesde = Math.max(tf, performance.now() - 16); s3Show(im, true); if (S3.piesA) s3Show(S3.piesA, false); }); }
+      im.onload = function () { im.onload = null; pinta(); };
+      restartImg(im); s3At(250, pinta);
+      s3Show(S3.tapPies, true); s3Ev('piesEspera');
+    }
+    if (T.A && T.A.src && S3.piesA && S3.piesA._blob) {   // pieza A una vez (anclada a su primer pintado), luego B
+      s3Estado.lucas = 'asomo'; lockUntil.s3 = Date.now() + T.A.ms + S3T.margen;
+      var im = S3.piesA, ok = false;
+      function anclaA() { if (ok) return; ok = true; requestAnimationFrame(function (tf) { var a = Math.max(tf, performance.now() - 16); s3Ev('piesAsoman'); s3At(a + T.A.ms - (T.A.ultimoMs || 0) - performance.now(), espera); }); }
+      im.onload = function () { im.onload = null; anclaA(); };
+      restartImg(im); s3Show(im, true); s3At(250, anclaA);
+    } else espera();   // sin A (o aún sin descargar): directo al bucle
+  }
+  /* toque en los pies: voz → (fin de la voz + fin de ciclo de B) → clip C */
+  function s3TapPies() {
+    if (Date.now() < swallowClick || document.body.classList.contains('rsvp-open')) return;
+    if (!unlocked) unlock();
+    if (s3Estado.lucas !== 'espera' || s3Busy()) { s3Ign('pies'); return; }
+    var T = S3L.toque, t0 = performance.now();
+    s3Estado.lucas = 'voz'; s3Show(S3.tapPies, false); lockUntil.s3 = Date.now() + 60000;   // bloqueado hasta que s3LucasDesde fije el final
+    TAPS.log.push('s3:pies'); s3Ev('toquePies');
+    var p = playSfx('s3_lucas_f15'); s3Ev('voz');
+    p.then(function (dur) {
+      if (current !== s3 || s3Estado.lucas !== 'voz') return;
+      var e = dur && window.__jahsehAudio.at.filter(function (x) { return x.k === 's3_lucas_f15'; }).pop();   // inicio real de la voz
+      var fin = e ? e.t + e.dur * 1000 : t0 + T.vozMsSiFalla, c = T.B && T.B.cicloMs;
+      if (c) { var d = fin - S3.esperaDesde; fin = S3.esperaDesde + Math.ceil(d / c) * c; }   // siguiente ciclo completo del bucle B
+      // el polvo trae polvoLead ms vacíos: si el impacto llega antes, se arranca ya con B (sus primeros cuadros son transparentes)
+      var pol = T.C.impactoMs - S3T.polvoLead;
+      if (pol < 0) s3At(fin + pol - performance.now(), function () { if (s3Estado.lucas !== 'voz') return; restartImg(S3.polvo); s3Show(S3.polvo, true); S3.polvoYa = true; });
+      s3At(fin - performance.now(), function () { s3Estado.lucas = 'cae'; s3Ev('caida'); s3Lucas(S3T.lucasAt, false, true); });
+    });
+  }
+  if (S3.tapPies) bindTap(S3.tapPies, s3TapPies);
+  window.__jahsehS3dbg = { esperaDesde: function () { return S3.esperaDesde || 0; } };   // solo lectura, para las pruebas
+  /* pelotas: carga diferida (recién al terminar la escena) */
+  function s3PelotaCarga(im, src) {
+    if (!im || im._blob || im._cargando) return;
+    im._cargando = true;
+    blobs[src] = blobs[src] || fetch(src).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .catch(function (e) { log('img error ' + src + ' ' + e); return null; });
+    blobs[src].then(function (b) { im._cargando = false; if (b) im._blob = b; });
+  }
+  function s3PelotaPrecarga() {
+    s3PelotaCarga(S3.pelotaB, S3P.bugs.src);
+    if (S3P.lucas) {
+      if (!S3.pelotaL) S3.pelotaL = s3CapaLucas('s3LucasPelota', 'Pato Lucas con la pelota');
+      s3PelotaCarga(S3.pelotaL, S3P.lucas.src);
+    }
+  }
+  function s3Pelota(quien) {
+    var P = S3P[quien], im = quien === 'bugs' ? S3.pelotaB : S3.pelotaL;
+    if (!P || !im || !im._blob) return false;
+    lockUntil.s3 = Date.now() + P.ms + S3T.margen;
+    if (quien === 'bugs') s3Enlaza(im, S3.loop);
+    else if (s3Parado()) s3Enlaza(im, S3.reposo, function () { s3Show(S3.lucas2, false); });   // de reposo a pelota sin corte
+    else { restartImg(im); s3Show(im, true); }
+    P.contactos.forEach(function (c, n) { s3At(c, function () { playSfx(S3P.sonido); s3Ev('rebote' + (n + 1)); }); });
+    s3At(P.ms, function () {
+      if (quien === 'bugs') s3Enlaza(S3.loop, im);
+      else if (s3Parado()) { if (S3.reposo && S3.reposo._blob) s3Enlaza(S3.reposo, im); }   // vuelve al reposo (si no, queda su último cuadro = reposo)
+      else s3Show(im, false);   // provisional 'sale': su último cuadro ya está vacío (salió por la derecha); la zona sigue activa
+      s3Ev('pelotaFin:' + quien);
+    });
+    S3P.escenas.push(quien); s3Ev('pelota:' + quien);
+    return true;
+  }
+  function s3Busy() { return Date.now() < (lockUntil.s3 || 0); }
+  function s3Ign(who) { window.__jahsehTap.ignored.push('s3:' + who); TAPS.log.push('s3:' + who + ':ignorado'); log('tap ignorado s3 ' + who); }
+  function s3Tap(who) {
+    if (Date.now() < swallowClick || document.body.classList.contains('rsvp-open')) return;
+    if (!unlocked) unlock();
+    if (s3Busy()) { s3Ign(who); return; }
+    if (s3Estado.fin) {
+      // después de la escena: pelotas, alternando Lucas/Bugs si hay clip de Lucas
+      var quien = S3P.lucas ? (S3P.turno % 2 === 0 ? 'lucas' : 'bugs') : 'bugs';
+      if (!s3Pelota(quien)) {
+        var otro = quien === 'lucas' ? 'bugs' : 'lucas';
+        if (S3P[otro] && s3Pelota(otro)) quien = otro;
+        else if (who === 'bugs') { s3Clear(); lockUntil.s3 = Date.now() + S3T.bugsMs + S3T.margen; s3Bugs(S3T.bugsAt, false); quien = 'bugs-bajada'; } // la pelota aún no cargó: repite asomo y bajada (la escalera ya está)
+        else { s3Ign(who); return; }
+      }
+      if (quien === 'lucas') S3P.turno = 1; else if (quien === 'bugs') S3P.turno = 0;   // pasa el turno al otro
+      TAPS.log.push('s3:' + quien); TAPS.count['s3_' + quien] = (TAPS.count['s3_' + quien] || 0) + 1;
+      return;
+    }
+    // durante la escena todo está bloqueado (lockUntil.s3), así que aquí solo se llega si la escena se cortó
+    if (who === 'lucas' && s3Estado.lucasVis) { s3Clear(); lockUntil.s3 = Date.now() + S3T.lucas1Ms + S3T.lucas2Ms + S3T.margen; s3Lucas(S3T.lucasAt, true); TAPS.log.push('s3:lucas'); }
+    else s3Ign(who);
+  }
+  bindTap(S3.tapLucas, function () { s3Tap('lucas'); });
+  bindTap(S3.tapBugs, function () { s3Tap('bugs'); });
+  /* ---------- v13 P3: cuadro con pila de fotos ----------
+     Toque/clic (o Enter/Espacio) en el marco: la foto de arriba se desliza y gira un poco hacia la derecha, pasa detrás
+     de la pila y queda la siguiente, en orden y cíclico. Solo se mueve la foto (traslación + giro leve; sin escala ni filtros).
+     Lista: anim/s3_fotos/lista.json {"fotos":[{"src","ajuste":"cover"|"contain","anim":null|ruta}, ...]} (también admite rutas sueltas);
+     si falta o está mal, S3F_DEF. Las fotos tapan exactamente la ventana x352 y1031 w376 h501 (la foto 1 está horneada en p3.webp);
+     con «contain» las franjas libres son del color del paspartú (#f6ecdc), así no se ve la foto horneada de abajo.
+     Carga diferida: solo 2 <img> (la actual y la siguiente). «anim»: WebP animado de esa foto; reemplaza a la fija solo cuando
+     esa foto está arriba y la animada ya cargó (si no hay, queda la fija). Sonido de página solo si no suena otro (p. ej. la voz de Lucas). */
+  var S3F_DEF = [{ src: 'anim/s3_fotos/foto_1.webp', ajuste: 'cover', anim: null }];
+  var S3F = window.__jahsehFotos = { lista: null, i: 0, busy: 0, pasadas: 0, ignorados: 0, sonidos: 0, mudos: 0, MS: 600, el: $('#s3Fotos'), a: null, b: null };
+  function s3FotoItem(k) { var L = S3F.lista; return L[((k % L.length) + L.length) % L.length]; }
+  function s3FotoCarga(im, k) {
+    var it = s3FotoItem(k);
+    im.classList.remove('lista'); im.onload = null; im._k = k; im._anim = false;
+    im.style.objectFit = it.ajuste === 'contain' ? 'contain' : 'cover';
+    if (im.getAttribute('src') === it.src && im.complete && im.naturalWidth) { im.classList.add('lista'); return; }
+    im.onload = function () { im.classList.add('lista'); if (im === S3F.a) s3FotoAnim(); };
+    im.src = it.src;
+  }
+  function s3FotoAnim() {                    // versión animada de la foto de arriba (opcional)
+    var im = S3F.a, k = im && im._k, it = im && s3FotoItem(k);
+    if (!it || !it.anim || im._anim || !im.classList.contains('lista')) return;
+    if (!S3F.pasadas && !s3Estado.fin) return;   // la animada de la foto 1 recién al terminar la escena (no compite con los clips al entrar)
+    var pre = new Image();
+    pre.onload = function pon() {
+      if (S3F.a === im && im._k === k && Date.now() < S3F.busy) { setTimeout(pon, S3F.busy - Date.now() + 20); return; }   // termina de pasar y luego cambia
+      if (S3F.a === im && im._k === k && !im._anim) { im.onload = null; im._anim = true; im.src = it.anim; S3F.animadas = (S3F.animadas || 0) + 1; log('foto anim ' + it.anim); } };
+    pre.src = it.anim;
+  }
+  function s3FotosInit() {
+    if (!S3F.el || S3F.cargando) return;
+    S3F.cargando = true;
+    fetch('anim/s3_fotos/lista.json', { cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (j) {
+        var L = (j && Array.isArray(j.fotos) ? j.fotos : []).map(function (x) {
+          return typeof x === 'string' ? { src: x, ajuste: 'cover', anim: null } : x;
+        }).filter(function (x) { return x && typeof x.src === 'string' && x.src; });
+        S3F.lista = L.length ? L : S3F_DEF;
+        S3F.b = document.createElement('img'); S3F.a = document.createElement('img');
+        [S3F.b, S3F.a].forEach(function (im) { im.alt = ''; im.decoding = 'async'; im.draggable = false; S3F.el.appendChild(im); });
+        S3F.a.alt = 'Foto de JAHSEH'; S3F.a.style.zIndex = 2; S3F.b.style.zIndex = 1;
+        s3FotoCarga(S3F.a, 0);
+        if (S3F.lista.length > 1) s3FotoCarga(S3F.b, 1);   // precarga solo la siguiente
+      });
+  }
+  function s3FotoSonido() {
+    var otro = Object.keys(sfxNodes).some(function (k) { return k !== 'sobre'; });   // un solo sonido a la vez
+    if (otro || !unlocked) { S3F.mudos++; return; }
+    S3F.sonidos++; playSfx('s3_foto_pagina', 0.8);
+  }
+  function s3FotoPasa() {
+    if (Date.now() < swallowClick || document.body.classList.contains('rsvp-open') || !S3F.lista) return;
+    if (Date.now() < S3F.busy) { S3F.ignorados++; log('foto: toque ignorado (pasando)'); return; }
+    if (S3F.lista.length < 2) return;
+    if (!unlocked) unlock();
+    S3F.busy = Date.now() + S3F.MS + 50;
+    var top = S3F.a, under = S3F.b;
+    top.classList.add('pasa');
+    s3FotoSonido();
+    if (top.animate) top.animate([
+      { transform: 'translate(0,0) rotate(0deg)' },
+      { transform: 'translate(15%,-1%) rotate(6deg)', offset: 0.45 },
+      { transform: 'translate(6%,1%) rotate(2.5deg)', offset: 0.75 },
+      { transform: 'translate(0,0) rotate(0deg)' }
+    ], { duration: S3F.MS, easing: 'ease-in-out' });
+    setTimeout(function () { top.style.zIndex = 1; under.style.zIndex = 2; }, S3F.MS * 0.45);   // a mitad de camino pasa detrás
+    setTimeout(function () {
+      top.classList.remove('pasa');
+      S3F.i = (S3F.i + 1) % S3F.lista.length; S3F.pasadas++;
+      S3F.a = under; S3F.b = top; under.alt = 'Foto de JAHSEH'; top.alt = '';
+      s3FotoCarga(top, S3F.i + 1);                                                             // la de atrás pasa a ser la siguiente
+      s3FotoAnim();
+      log('foto ' + (S3F.i + 1) + '/' + S3F.lista.length);
+    }, S3F.MS);
+  }
+  if (S3F.el) {
+    bindTap(S3F.el, s3FotoPasa);
+    S3F.el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); s3FotoPasa(); }
+    });
+  }
+  /* fin v13 P3 */
   // pantalla 8: zonas de toque por bebé
   $$('.tap8').forEach(function (z) { bindTap(z, function () { if (Date.now() < swallowClick) return; tapChar(document.getElementById(z.getAttribute('data-for'))); }); });
   $$('a.hot').forEach(function (a) { a.addEventListener('click', function (e) { e.stopPropagation(); log('link ' + a.id); }); });
@@ -946,7 +1436,7 @@
     played.s1 = true;
     document.body.classList.add('opened');
     $('#abrirSobre').classList.remove('pulse');
-    sections.forEach(function (s, i) { if (i > 1) loadBg(s); });
+    sections.forEach(function (s, i) { if (i > 1 && s !== s3) loadBg(s); });   // v13 final: el fondo de la 3 va con su precarga diferida
     flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
     confetti($('#confettiTop'), 1600, 140);
     setTimeout(function () { navLock = 0; goTo(1, 'open'); }, 900);

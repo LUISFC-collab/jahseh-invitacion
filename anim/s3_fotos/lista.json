@@ -1,0 +1,12 @@
+{
+  "nota": "Fotos del cuadro de la pantalla 3, EN ORDEN y cíclico (la primera es la que se ve al entrar). Rutas relativas a index.html. ajuste: cover (llena la ventana, solo si casi no recorta) o contain (entera, franjas color paspartú). anim: WebP animado opcional de esa foto (mismo encuadre y proporción que la fija, primer cuadro = la fija) o null. Fijas a propósito: a (decisión de Luis), b y f (sin animación aprobada). Ver LEEME_fotos.txt",
+  "fotos": [
+    { "src": "anim/s3_fotos/foto_1.webp", "ajuste": "cover",   "anim": "anim/s3_fotos/anim_1.webp" },
+    { "src": "anim/s3_fotos/foto_a.webp", "ajuste": "contain", "anim": null },
+    { "src": "anim/s3_fotos/foto_b.webp", "ajuste": "cover",   "anim": null },
+    { "src": "anim/s3_fotos/foto_c.webp", "ajuste": "cover",   "anim": "anim/s3_fotos/anim_c.webp" },
+    { "src": "anim/s3_fotos/foto_d.webp", "ajuste": "contain", "anim": "anim/s3_fotos/anim_d.webp" },
+    { "src": "anim/s3_fotos/foto_e.webp", "ajuste": "contain", "anim": "anim/s3_fotos/anim_e.webp" },
+    { "src": "anim/s3_fotos/foto_f.webp", "ajuste": "cover",   "anim": null }
+  ]
+}
