@@ -3,7 +3,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var stage = $('#stage');
-  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v12-final';
+  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v12-ligero';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
@@ -27,7 +27,7 @@
     intro: 'audio/intro.mp3', fondo: 'audio/fondo.mp3', sobre: 'audio/sobre.mp3',
     s1_piolin: 'audio/s1_piolin.mp3', s4_lucas: 'audio/s4_lucas.mp3', s5_taz: 'audio/s5_taz.mp3', s5_comer: 'audio/s5_taz_comer.mp3',
     s5_ent: 'audio/s5_taz_entrada_der.mp3', s5_sal: 'audio/s5_taz_salida_remolino.mp3',
-    s6_silvestre_a2: 'audio/s6_silvestre_a2.mp3', /* v9/v11: s6_silvestre: 'audio/s6_silvestre.mp3' */
+    s6_silvestre_a2: 'audio/s6_silvestre_a2.mp3',
     s7_lola: 'audio/s7_lola.mp3', s8_cierre: 'audio/s8_cierre_eso_es_todo_vaquero.mp3',
     s8_porky: 'audio/s8_porky_eso_es_todo.mp3',
     p2_piolin: 'audio/p2_piolin_frase01.mp3',  // Baby Piolín: «¡Ay, abuela! ¡Ven a ver esto de prisa!»
@@ -402,10 +402,10 @@
      empezando en la pose «arriba» (s7_lola_reposo.webp = los mismos cuadros de s7_lola.webp, desde el cuadro 18),
      que es el primer y último cuadro de las 4 animaciones: el cambio no salta. */
   var LOLA = [{ id: '01', ms: 3240 }, { id: '02', ms: 3950 }, { id: '03', ms: 2300 }, { id: '11', ms: 3370 }];
-  var LOLA_REPOSO = 'anim/s7_lola_reposo.webp';
+  var LOLA_REPOSO = 'anim/s7_lola_reposo.webp?v=19';   // ?v=19: versión aligerada (mismo nombre de archivo)
   var lolaPre = null, lolaBag = [], lolaLast = null, lolaTimer = 0, lolaRun = 0;
   window.__jahsehLola = [];
-  function lolaUrl(a) { return 'anim/s7_lola_' + a.id + '.webp'; }
+  function lolaUrl(a) { return 'anim/s7_lola_' + a.id + '.webp?v=19'; }
   function getBlob(url) {
     if (!blobs[url]) {
       blobs[url] = fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
