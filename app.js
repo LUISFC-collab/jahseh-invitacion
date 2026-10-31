@@ -3,7 +3,7 @@
   var $ = function (s) { return document.querySelector(s); };
   var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
   var stage = $('#stage');
-  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v14-rsvp';
+  var LOG = window.__jahsehLog = []; window.__jahsehVersion = 'v15-cierre';
   function log(m) { LOG.push(Date.now() + ' ' + m); }
 
   /* ---------- tamaño de página 9:16 ---------- */
@@ -22,7 +22,7 @@
   var raw = {}, buffers = {}, decoding = {};
   var muted = false, unlocked = false;
   var MUSIC_INTRO = 0.85, MUSIC_LOOP = 0.32, DUCK = 0.22;
-  var musicBase = MUSIC_INTRO, activeSfx = 0, sfxNodes = {};
+  var musicBase = MUSIC_INTRO, activeSfx = 0, sfxNodes = {}, sfxGains = {};
   var AUDIO = {
     intro: 'audio/intro.mp3', fondo: 'audio/fondo.mp3', sobre: 'audio/sobre.mp3',
     s1_piolin: 'audio/s1_piolin.mp3',
@@ -35,8 +35,12 @@
     s4_lucas: 'audio/s4_lucas.mp3', s5_taz: 'audio/s5_taz.mp3', s5_comer: 'audio/s5_taz_comer.mp3',
     s5_ent: 'audio/s5_taz_entrada_der.mp3', s5_sal: 'audio/s5_taz_salida_remolino.mp3',
     s6_silvestre_a2: 'audio/s6_silvestre_a2.mp3',
-    s7_lola: 'audio/s7_lola.mp3', s8_cierre: 'audio/s8_cierre_eso_es_todo_vaquero.mp3',
+    s7_lola: 'audio/s7_lola.mp3', s8_cierre: 'audio/s8_cierre_eso_es_todo_vaquero.mp3?v=27',   // v15: recortado a 5,64 s (0-3,75 s intacto: Porky sigue sincronizado)
     s8_porky: 'audio/s8_porky_eso_es_todo.mp3',
+    // v15: despedida de Warner (audio de Luis): Porky «¡Eso es todo, amigos!» + música final, recortado y a -14 LUFS. Suena UNA vez por sesión,
+    // en el primer toque del invitado en la pantalla 8. Bugs bebé al tocarlo (doblaje latino, baby_bugs/frases/frase_02/03/04, alterna en cada toque)
+    s8_despedida: 'audio/s8_despedida_eso_es_todo.mp3?v=27',
+    s8_bugs_02: 'audio/s8_bugs_02.mp3?v=27', s8_bugs_03: 'audio/s8_bugs_03.mp3?v=27', s8_bugs_04: 'audio/s8_bugs_04.mp3?v=27',
     p2_piolin: 'audio/p2_piolin_frase01.mp3',  // Baby Piolín: «¡Ay, abuela! ¡Ven a ver esto de prisa!»
     p2_piolin_f04: 'audio/p2_piolin_frase04.mp3', // Baby Piolín arriba: «¡Este es el mejor cumpleaños que he tenido!» (frase 04, animación v4)
     // P7 Lola al tocar (MP3 originales del doblaje latino; carga perezosa: solo cuando la pantalla 7 está cerca)
@@ -47,7 +51,8 @@
     // (sonido_escena_una_vez.mp3 0-1,60 s, la voz empieza en 1,653 s); al tocarlo, «Ehh... ¿Qué hay de nuevo, viejo?» (doblaje latino, voz sola del paquete)
     s7_bugs_entra: 'audio/s7_bugs_entra_pasos.mp3', s7_bugs_voz: 'audio/s7_bugs_que_hay_de_nuevo_viejo.mp3'
   };
-  var LAZY = { s7_lola_01: 1, s7_lola_02: 1, s7_lola_03: 1, s7_lola_11: 1, s4_lucas_f03: 1, s6_silvestre_f14: 1, s6_silvestre_f09: 1, s7_bugs_entra: 1, s7_bugs_voz: 1 };
+  var LAZY = { s7_lola_01: 1, s7_lola_02: 1, s7_lola_03: 1, s7_lola_11: 1, s4_lucas_f03: 1, s6_silvestre_f14: 1, s6_silvestre_f09: 1, s7_bugs_entra: 1, s7_bugs_voz: 1,
+    s8_despedida: 1, s8_bugs_02: 1, s8_bugs_03: 1, s8_bugs_04: 1 };   // v15: se bajan cuando la 7 o la 8 está a la vista (s8Audio)
   window.__jahsehAudio = { buffers: buffers, plays: [], at: [] };
 
   function fetchRaw(k) {
@@ -98,7 +103,12 @@
     unlocked = true;
     Object.keys(AUDIO).forEach(function (k) { if (!LAZY[k] || raw[k]) getBuffer(k).catch(function () {}); });
     // v13: si se llegó a una pantalla con sonido de escena antes del primer toque, ese primer toque la arranca (imagen y voz juntas)
-    if (pendingAuto) { var ps = pendingAuto; pendingAuto = null; if (ps === current) syncEnter(ps); }
+    if (pendingAuto) {
+      var ps = pendingAuto; pendingAuto = null;
+      // v15: en la 8, el primer toque (audio antes bloqueado) es el de la despedida: no se encima la voz de la escena
+      if (ps.id === 's8' && !S8D.despedida) S8D.sinEntrada = true;
+      if (ps === current) syncEnter(ps);
+    }
   }
   var pendingAuto = null;
 
@@ -131,11 +141,16 @@
      dur (s): toca solo un tramo [offset, offset+dur] con un fundido de 30 ms al final (pantalla 5, Taz) */
   /* enPerf (opcional, v13 P3): instante exacto en reloj performance.now() en que debe empezar a sonar (se agenda en el reloj
      del AudioContext, sin depender de la precisión de setTimeout). */
-  function playSfx(k, gain, offset, dur, enPerf) {
+  function playSfx(k, gain, offset, dur, enPerf, fadeIn) {
     if (!ctx || !unlocked) return Promise.resolve(false);
     if (ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }   // reintenta reanudar antes de cada sonido
     return getBuffer(k).then(function (b) {
       Object.keys(sfxNodes).forEach(function (o) {
+        // v15: la música final de la despedida (ya terminada su voz) no se corta por la voz de un bebé: baja de volumen y sigue
+        if (o === 's8_despedida' && k !== o && k !== 'sobre' && sfxGains[o]) {
+          try { var gg = sfxGains[o].gain; gg.cancelScheduledValues(ctx.currentTime); gg.setValueAtTime(gg.value, ctx.currentTime); gg.linearRampToValueAtTime(S8_DESP_DUCK, ctx.currentTime + 0.08); } catch (e) {}
+          return;
+        }
         if (o === k || (k !== 'sobre' && o !== 'sobre')) { // un personaje a la vez
           try { sfxNodes[o].onended = null; sfxNodes[o].stop(); } catch (e) {}
           delete sfxNodes[o]; activeSfx = Math.max(0, activeSfx - 1);
@@ -144,8 +159,9 @@
       var g = ctx.createGain(), gv = gain || 1; g.gain.value = gv; g.connect(sfxGain);
       var s = ctx.createBufferSource(); s.buffer = b; s.connect(g);
       offset = Math.min(Math.max(0, offset || 0), Math.max(0, b.duration - 0.05));
+      if (fadeIn) { g.gain.setValueAtTime(0, ctx.currentTime); g.gain.linearRampToValueAtTime(gv, ctx.currentTime + fadeIn); }   // v15b
       if (dur) { var te = ctx.currentTime + dur; g.gain.setValueAtTime(gv, Math.max(ctx.currentTime, te - 0.03)); g.gain.linearRampToValueAtTime(0, te); }
-      sfxNodes[k] = s; activeSfx++; setMusicLevel(0.2);
+      sfxNodes[k] = s; sfxGains[k] = g; activeSfx++; setMusicLevel(0.2);
       s.onended = function () { if (sfxNodes[k] === s) delete sfxNodes[k]; activeSfx = Math.max(0, activeSfx - 1); setMusicLevel(0.6); };
       var ahora = performance.now(), espera = enPerf ? Math.max(0, (enPerf - ahora) / 1000) : 0, cuando = espera ? ctx.currentTime + espera : 0;
       if (dur) s.start(cuando, offset, dur); else s.start(cuando, offset);
@@ -291,19 +307,93 @@
     return blobs[url];
   }
   var TAPS = window.__jahsehTaps = { log: [], busy: {}, count: {} };
+  /* v15 · pantalla 8: despedida y voces al tocar
+     - DESPEDIDA (s8_despedida, 3,76 s, audio de Luis: Porky «¡Eso es todo, amigos!» + música final de Warner): suena UNA sola vez por sesión,
+       en el primer toque del invitado en la 8 (a un bebé, a su zona o al fondo; no cuentan «Volver al inicio», «Ver de nuevo», el silencio
+       ni un deslizamiento). Si la voz de la escena (s8_cierre) aún está diciendo «¡Eso es todo, amigos!», la despedida entra justo cuando
+       esa voz termina (S8_VOZ_FIN_MS desde que empezó) y corta el resto de efectos de la escena: nunca se pisan. Con el audio bloqueado
+       (enlace ?p=8 sin gesto), ese primer toque desbloquea y suena directamente la despedida, sin la voz de la escena encima.
+     - VOCES AL TOCAR (Porky, Bugs): mientras habla la escena o la VOZ de la despedida (sus primeros S8_DESP_VOZ_MS), el bebé salta al
+       instante y su voz (con el reinicio de su animación) espera a que esa voz termine; solo queda una en espera (la del último toque).
+       Durante la música final de la despedida la voz del bebé sí entra: la música baja a S8_DESP_DUCK y sigue (no se corta).
+       Bugs alterna frase_02, 03 y 04 en cada toque. */
+  var S8_VOZ_FIN_MS = 3600, S8_DESP_MS = 3760, S8_DESP_VOZ_MS = 1600, S8_DESP_DUCK = 0.35;
+  /* v15b · que NO se repita «¡Eso es todo, amigos!»: si la voz de la escena lo acaba de decir (o lo está diciendo) cuando llega el
+     primer toque —hasta S8_ECO_MS después de que termina—, la despedida entra al terminar esa voz SOLO con su música final
+     (desde S8_DESP_MUSICA_S, justo después de la voz de Porky en el audio de Luis, con un fundido corto de entrada): la frase
+     suena una sola vez y la música de Warner la remata. Pasado ese margen, el primer toque trae la despedida completa (frase + música).
+     Porky al tocarlo tampoco repite la frase si acaba de sonar (o va a sonar) una: salta y se anima, sin voz. */
+  var S8_ECO_MS = 3000, S8_DESP_MUSICA_S = 1.62, S8_DESP_FADE_S = 0.06;
+  var S8D = window.__jahsehS8 = { despedida: false, sonada: false, sinEntrada: false, vozHasta: 0, escenaFin: 0, fraseFin: 0, soloMusica: false, log: [], timers: [], pend: null };
+  function s8Audio() { ['s8_despedida', 's8_bugs_02', 's8_bugs_03', 's8_bugs_04'].forEach(function (k) { fetchRaw(k); if (ctx) getBuffer(k).catch(function () {}); }); }
+  function s8Reset() {
+    S8D.timers.forEach(clearTimeout); S8D.timers = []; S8D.pend = null; S8D.vozHasta = 0; S8D.escenaFin = 0; S8D.sinEntrada = false;
+    if (S8D.despedida && !S8D.sonada) S8D.despedida = false;   // se salió de la 8 antes de que sonara: queda para el próximo toque
+  }
+  function s8Later(fn, ms) { S8D.timers.push(setTimeout(function () { if (current && current.id === 's8') fn(); }, Math.max(0, ms))); }
+  function s8Disparar(por) {
+    if (S8D.despedida || !current || current.id !== 's8' || document.body.classList.contains('rsvp-open')) return;
+    if (!unlocked) unlock();
+    S8D.despedida = true;
+    var ahora = performance.now(), espera = Math.max(0, S8D.vozHasta - ahora);
+    var soloMusica = S8D.soloMusica = !!S8D.escenaFin && ahora < S8D.escenaFin + S8_ECO_MS;   // v15b: la escena acaba de decir la frase
+    var vozDesp = soloMusica ? 150 : S8_DESP_VOZ_MS;   // solo música: las voces de los bebés esperan apenas a que arranque
+    S8D.vozHasta = ahora + espera + vozDesp;
+    if (!soloMusica) S8D.fraseFin = ahora + espera + S8_DESP_VOZ_MS;
+    S8D.log.push('despedida:' + por + (soloMusica ? ':solo-musica' : '') + (espera ? ':espera' + Math.round(espera) : ''));
+    s8Later(function () {
+      var p = soloMusica ? playSfx('s8_despedida', 1, S8_DESP_MUSICA_S, 0, 0, S8_DESP_FADE_S) : playSfx('s8_despedida');
+      p.then(function (d) {
+        if (!d) { S8D.log.push('despedida:sin-sonido'); return; }
+        var t = performance.now();
+        S8D.sonada = true; S8D.vozHasta = Math.max(S8D.vozHasta, t + (soloMusica ? 0 : S8_DESP_VOZ_MS));
+        if (!soloMusica) S8D.fraseFin = t + S8_DESP_VOZ_MS;
+        S8D.despHasta = t + (typeof d === 'number' ? d * 1000 : S8_DESP_MS);
+        S8D.log.push('despedida:suena' + (soloMusica ? ':solo-musica' : ''));
+      });
+    }, espera);
+  }
+  // primer toque en la 8 (también al fondo): se decide cuando ya pasó el touchend (para saber si fue un deslizamiento)
+  ['touchend', 'click'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      if (S8D.despedida || !current || current.id !== 's8') return;
+      var t = e.target;
+      if (!t || !t.closest || t.closest('#volverBtn, #againBtn, #muteBtn, #hint, #rsvp') || !(t.closest('#s8') )) return;
+      setTimeout(function () { if (Date.now() >= swallowClick) s8Disparar(ev); }, 0);
+    }, true);
+  });
   function tapChar(im) {
     if (!im) return;
     if (!unlocked) unlock();
     var now = Date.now();
     if (now < (im._busyUntil || 0)) { TAPS.log.push(im.id + ':ignorado'); log('tap ignorado ' + im.id); return; } // no se reinicia a mitad
-    im._busyUntil = now + (+im.getAttribute('data-tap-ms') || 600);
+    var ks = (im.getAttribute('data-tap-sounds') || '').split(',').filter(Boolean);
+    var k = ks.length ? ks[(im._turno = ((im._turno == null ? -1 : im._turno) + 1) % ks.length)] : im.getAttribute('data-tap-sound');
+    if (k && im.closest('#s8')) s8Disparar('toque-' + im.id);           // v15: el primer toque de la 8 es la despedida
+    if (k === 's8_porky' && performance.now() < Math.max(S8D.fraseFin, S8D.escenaFin) + S8_ECO_MS) {   // v15b: la frase acaba de sonar (o va a sonar)
+      TAPS.log.push(im.id + ':sin-voz(eco)'); k = null; var mudo = true;   // solo salta: su animación de hablar no corre sin su voz
+    }
+    var espera = k && im.closest('#s8') ? Math.max(0, S8D.vozHasta - performance.now()) : 0;
+    im._busyUntil = now + espera + (+im.getAttribute('data-tap-ms') || 600);
     im.classList.remove('salto'); void im.offsetWidth; im.classList.add('salto');
-    var k = im.getAttribute('data-tap-sound');
-    loadTapBlob(im).then(function (b) {
-      restartImg(im, b);                 // solo este bebé vuelve a empezar su animación
-      if (k) playSfx(k);                 // y suena lo suyo, si tiene sonido
-    });
-    TAPS.log.push(im.id + ':anima' + (k ? '+' + k : ''));
+    var hacer = function () {
+      if (mudo) return;
+      loadTapBlob(im).then(function (b) {
+        restartImg(im, b);                 // solo este bebé vuelve a empezar su animación
+        if (k) playSfx(k).then(function (d) {   // y suena lo suyo; mientras habla no se le reinicia
+          if (typeof d === 'number') im._busyUntil = Math.max(im._busyUntil, Date.now() + Math.ceil(d * 1000));
+        });
+      });
+    };
+    if (espera > 0) {
+      if (S8D.pend) { S8D.pend.im._busyUntil = 0; TAPS.log.push(S8D.pend.im.id + ':reemplazado'); }
+      var p = S8D.pend = { im: im, k: k };
+      s8Later(function () { if (S8D.pend === p) { S8D.pend = null; hacer(); } }, espera);
+      TAPS.log.push(im.id + ':anima+' + k + ':espera' + Math.round(espera));
+    } else {
+      hacer();
+      TAPS.log.push(im.id + ':anima' + (k ? '+' + k : ''));
+    }
     log('tap ' + im.id);
   }
 
@@ -722,7 +812,8 @@
     navLock = now + NAV_MS;
     if (F04) F04.reset();
     rotaReset();
-    stopSfx(); t5Stop(); s3Clear();
+    stopSfx(); t5Stop(); s3Clear(); s8Reset();
+    if (i >= 6) s8Audio();   // v15: audios de la 8 (despedida y Bugs) desde la 7
     if (ctx && unlocked && !muted && ctx.state !== 'running') { try { ctx.resume(); } catch (e) {} }   // v13: dentro del gesto (iOS)
     if (pendingAuto && pendingAuto !== sections[i]) pendingAuto = null;
     idx = i; current = sections[i];
@@ -823,8 +914,11 @@
       var go = function () {
         if (!alive()) return;
         PERF.push('sync ' + (withLead ? 'porky+voz' : 'voz sola') + ' ' + Math.round(performance.now() - t0));
-        if (auto && unlocked) {
+        if (auto && unlocked && sec.id === 's8' && S8D.sinEntrada) {   // v15: la despedida reemplaza a la voz de la escena
+          S8D.sinEntrada = false; played[sec.id] = true; S8D.log.push('entrada-omitida'); s8Disparar('desbloqueo');
+        } else if (auto && unlocked) {
           played[sec.id] = true; playSfx(k);
+          if (sec.id === 's8') { S8D.vozHasta = S8D.escenaFin = S8D.fraseFin = performance.now() + S8_VOZ_FIN_MS; S8D.log.push('entrada'); }
           if (lead.hasAttribute('data-entry-lock-ms')) lead._busyUntil = Date.now() + (+lead.getAttribute('data-entry-lock-ms'));
         }
         setTimeout(function () { if (current === sec) loadTapBlob(lead); }, TOQUE_MS);

@@ -136,7 +136,7 @@ var URL_HOJA = '';
      s7_bugs_reposo.webp = cuadro 24; s7_bugs_habla.webp = cuadros 25-52 (1860 ms) + s7_bugs_que_hay_de_nuevo_viejo.mp3 (la voz empieza
      17 ms antes del cuadro 25 en la escena original: se arranca con ese desfase). Mismos tiempos por cuadro que el GIF (60/70 ms). */
   var BUGS = { entra: 'anim/s7_bugs_entra.webp?v=26', reposo: 'anim/s7_bugs_reposo.webp?v=26', habla: 'anim/s7_bugs_habla.webp?v=26',
-               entraMs: 1670, hablaMs: 1860, vozOff: 0.017, alto: 110, altoMini: 80, margen: 2 };
+               entraMs: 1670, hablaMs: 1860, vozOff: 0.017, alto: 110, altoMini: 80, margen: 2, esperaMax: 1500 };
   var bugsCaja = $('#rsvpBugs'), bugsImg = $('#bugsImg'), bugsGlobo = $('#bugsGlobo'), bugsTocame = $('#bugsTocame');
   var bugsBlob = {}, bugsUrl = null, bugsEstado = 'fuera', bugsTimer = 0, bugsOk = true;
   window.__rsvp.bugs = { eventos: [] };
@@ -190,17 +190,32 @@ var URL_HOJA = '';
     });
   }
   $('#bugsBtn').addEventListener('click', function (e) { e.preventDefault(); bugsHablar(); });
-  // Bugs entra cuando el invitado empieza a escribir su nombre (primer texto, o foco en el cajetín que ya trae texto)
-  nombre.addEventListener('input', function () { if (limpio(nombre.value)) bugsEntrar(); });
-  nombre.addEventListener('focus', function () { if (limpio(nombre.value)) bugsEntrar(); });
+  /* v15 (pedido de Luis): Bugs ya NO espera a que se escriba el nombre: entra caminando UNA vez apenas se despliega el formulario
+     (cuando su animación de entrada ya bajó, como tarde a los BUGS.esperaMax ms; si tarda más usa la URL directa). Al cerrar y volver
+     a abrir el formulario sigue ahí, en reposo; no vuelve a entrar. */
+  function bugsAlAbrir() {
+    if (bugsEstado !== 'fuera') return;
+    var bajada = Promise.race([bugsBlob.entra || Promise.resolve(), new Promise(function (r) { setTimeout(r, BUGS.esperaMax); })]);
+    // espera también a que termine la subida de la hoja (animación «subir» .3s): durante la subida
+    // getBoundingClientRect da la hoja aún abajo y Bugs quedaría pegado al borde inferior
+    var subida = new Promise(function (r) {
+      var hecho = false, fin = function () { if (!hecho) { hecho = true; hoja.removeEventListener('animationend', fin); r(); } };
+      hoja.addEventListener('animationend', fin); setTimeout(fin, 360);
+    });
+    Promise.all([bajada.catch(function () {}), window.__jahsehWebp || Promise.resolve(true), subida]).then(function (r) {
+      bugsOk = !!r[1];
+      if (!caja.hidden && !form.hidden) bugsEntrar();
+    });
+  }
   if (window.ResizeObserver) new ResizeObserver(bugsAcomodar).observe(hoja);
+  hoja.addEventListener('animationend', bugsAcomodar);
   window.addEventListener('resize', bugsAcomodar);
   if (window.__jahsehWebp) window.__jahsehWebp.then(function (ok) { bugsOk = !!ok; });
 
   function abrir() {
     form.hidden = false; listo.hidden = true;
     caja.hidden = false; document.body.classList.add('rsvp-open');
-    hoja.scrollTop = 0; ajustarAlto(); bugsPrecarga(); bugsAcomodar();
+    hoja.scrollTop = 0; ajustarAlto(); bugsPrecarga(); bugsAcomodar(); bugsAlAbrir();
     setTimeout(function () { try { nombre.focus({ preventScroll: true }); } catch (e) {} }, 320);
   }
   function cerrar() { caja.hidden = true; document.body.classList.remove('rsvp-open'); ajustarAlto(); }
