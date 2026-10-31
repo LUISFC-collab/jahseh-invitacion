@@ -5,15 +5,16 @@ html,body{margin:0;height:100%;background:var(--cream);overflow:hidden;overscrol
 body{position:fixed;inset:0;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #stage{position:fixed;inset:0;overflow:hidden;touch-action:manipulation;overscroll-behavior:none;background:#bfe3f7}
 .sec{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#bfe3f7;
-  transform:translate3d(100%,0,0);visibility:hidden;transition:transform .35s cubic-bezier(.3,.7,.3,1),opacity .35s ease,visibility 0s linear .35s;will-change:transform}
-.sec.left{transform:translate3d(-35%,0,0);opacity:0}
-.sec.active{transform:none;opacity:1;visibility:visible;transition:transform .35s cubic-bezier(.3,.7,.3,1),opacity .35s ease,visibility 0s;z-index:2}
+  transform:translate3d(0,100%,0);visibility:hidden;transition:transform .42s cubic-bezier(.3,.7,.3,1),visibility 0s linear .42s;will-change:transform}
+/* v11: deslizamiento vertical: la actual sube y sale por arriba; la siguiente entra desde abajo */
+.sec.left{transform:translate3d(0,-100%,0)}
+.sec.active{transform:none;visibility:visible;transition:transform .42s cubic-bezier(.3,.7,.3,1),visibility 0s;z-index:2}
 .sec.instant{transition:none!important}
 .page{position:relative;width:var(--pw);height:calc(var(--pw)*16/9);flex:none;overflow:hidden}
 .bg{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
 .el,.sombra{position:absolute;left:calc(var(--x)/1080*100%);top:calc(var(--y)/1920*100%);width:calc(var(--w)/1080*100%);height:calc(var(--h)/1920*100%);display:block}
 img.el{pointer-events:none;-webkit-user-drag:none}
-img.char{pointer-events:auto;cursor:pointer;-webkit-touch-callout:none;transform-origin:50% 90%;z-index:3}
+img.char{pointer-events:auto;cursor:pointer;-webkit-touch-callout:none;z-index:3}
 img.char:not([src]){visibility:hidden}
 img.btnimg{z-index:2}
 .sombra{border-radius:50%;background:rgba(15,40,10,.32);filter:blur(calc(var(--pw)*6/1080));z-index:1;pointer-events:none}
@@ -21,9 +22,7 @@ img.btnimg{z-index:2}
   background:transparent;border:0;padding:0;margin:0;cursor:pointer;display:block;z-index:5;-webkit-appearance:none;appearance:none}
 .hot.pill{border-radius:999px}
 .hot:active{background:rgba(255,255,255,.2)}
-img.char.boing{animation:boing .5s cubic-bezier(.3,1.6,.5,1)}
-img.char.wide.boing{animation:none}
-@keyframes boing{0%{transform:scale(1)}30%{transform:scale(1.08,.94)}60%{transform:scale(.97,1.04)}100%{transform:scale(1)}}
+/* v10: sin efecto «boing» (escala) al tocar: deformaba las caras. El toque solo reinicia la animación con su sonido */
 .hot:focus-visible{outline:3px solid #1e6fd9;outline-offset:2px}
 .pulse{animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(22,58,176,0)}50%{box-shadow:0 0 0 calc(var(--pw)*.018) rgba(22,58,176,.45)}}
@@ -51,6 +50,9 @@ body.debug img.char{outline:2px dotted #2962ff}
   opacity:0;pointer-events:none;transition:opacity .4s;white-space:nowrap;display:flex;align-items:center;gap:6px}
 .hint span{display:inline-block;animation:bob 1s ease-in-out infinite}
 .hint.show{opacity:1}
+#hint.show{pointer-events:auto;cursor:pointer}   /* v11: tocar «Deslice ▲» también avanza */
+#hint span{font-size:12px;animation-name:bobUp}
+@keyframes bobUp{0%,100%{transform:translateY(2px)}50%{transform:translateY(-3px)}}
 .hint.again{box-shadow:0 3px 0 #1c1c1c;cursor:pointer;padding:9px 16px 10px;font-size:16px}
 .hint.again.show{pointer-events:auto}
 @keyframes bob{0%,100%{transform:translateX(-2px)}50%{transform:translateX(4px)}}
@@ -86,4 +88,56 @@ body.debug img.char{outline:2px dotted #2962ff}
 .rsvp-btn2{display:block;width:100%;margin:12px 0 0;padding:10px;border:2px solid var(--blue);border-radius:999px;background:#fff;color:var(--blue);font:17px/1 "Lilita One",system-ui,sans-serif;cursor:pointer}
 .rsvp-nota{margin:12px 0 0;text-align:center;font:13px/1.3 system-ui,-apple-system,sans-serif;color:#55608a}
 .rsvp-listo p{font:16px/1.4 system-ui,-apple-system,sans-serif;color:#1c1c1c}
-body.rsvp-open #hint,body.rsvp-open #againBtn{opacity:0}
+body.rsvp-open #hint,body.rsvp-open #againBtn{opacity:0;pointer-events:none}
+/* ---------- v10: toques por pantalla ---------- */
+/* Portada: el toque lo reciben zonas transparentes (.hot.tap); la capa animada no se deforma ni se mueve */
+#s2 img.char{pointer-events:none;cursor:default}
+.hot.tap{min-width:44px;min-height:44px;border-radius:18%}
+.hot.tap:active{background:transparent}
+/* Portada: fotos animadas de Jahseh, recortadas con máscara a la ventana de cada marco (debajo de los bebés) */
+.fotos{position:absolute;inset:0;z-index:0;pointer-events:none;-webkit-mask-image:url(img/p2_fotos_mascara.png);mask-image:url(img/p2_fotos_mascara.png);
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+video.foto{position:absolute;left:calc(var(--x)/1080*100%);top:calc(var(--y)/1920*100%);width:calc(var(--w)/1080*100%);height:calc(var(--h)/1920*100%);
+  transform-origin:0 0;transform:rotate(var(--r));object-fit:fill;display:block;opacity:0;transition:opacity .3s}
+video.foto.lista{opacity:1}
+/* Contador: la tira de Taz ocupa todo el ancho; solo responde el área sobre Taz (#tapTaz) */
+#s5 img.char.wide{pointer-events:none}
+.hot.tapchar:active{background:transparent}
+body.debug .hot.tapchar,body.debug .hot.tap{outline-color:#ff6d00;background:rgba(255,109,0,.18)}
+/* Confirmación: Lola tal cual (el GIF/WebP aprobado ya trae el movimiento) */
+img.char.fiel{min-width:44px;min-height:44px}
+/* v16 · P7 Lola: capa de sus 4 animaciones al tocar (no capta toques; el toque lo recibe #lola7, cuya caja no toca el botón) */
+img.lola-anim{pointer-events:none;z-index:3;visibility:hidden}
+img.lola-anim.on{visibility:visible}
+img.char.fiel.oculta{opacity:0}
+/* pantalla 8: el toque va a zonas propias por bebé; el salto es solo translateY (sin escala, no deforma) */
+#s8 img.char{pointer-events:none}
+.hot.tap8{z-index:4;border-radius:30%}
+.hot.tap8:active{background:transparent}
+img.char.salto{animation:salto .6s cubic-bezier(.3,.7,.4,1)}
+@keyframes salto{0%,100%{transform:translateY(0)}35%{transform:translateY(-6%)}65%{transform:translateY(0)}82%{transform:translateY(-1.5%)}}
+/* Portada: Piolín arriba alterna frase 01 (su capa de reposo reiniciada) y frase 04 (capa .p2f04 encima, misma posición). Sin escala ni movimiento del contenedor */
+.p2f04{pointer-events:none;visibility:hidden}
+.p2f04.on{visibility:visible}
+.p2f04>video,.p2f04>img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:fill;background:transparent;pointer-events:none}
+.p2f04>video::-webkit-media-controls,.p2f04>video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none}
+#s2 img.char.oculto{visibility:hidden}
+/* v11 «frase»: Taz del contador. Estados en #s5[data-t5]: intro (animación aprobada completa al entrar) → asoma (espía desde la derecha);
+   al tocar: entrada (remolino desde la derecha, 1,10 s) → comer (frase, 1,88 s) → salida (remolino, 1,20 s) → asoma. Solo se muestra un tramo a la vez; nada se escala: el asomado entra con translateX (rígido) */
+#s5 img.t5{z-index:3;pointer-events:none;visibility:hidden}
+#s5[data-t5="asoma"] #t5Asoma,#s5[data-t5="entrada"] #t5Entrada,#s5[data-t5="comer"] #t5Comer,#s5[data-t5="salida"] #t5Salida{visibility:visible}
+#s5[data-t5]:not([data-t5="intro"]) img.char.wide{visibility:hidden}
+#t5Asoma{transform:translateX(100%)}
+#s5[data-t5="asoma"] #t5Asoma{transform:none;transition:transform .35s cubic-bezier(.3,.7,.3,1)}
+body.debug #s5 img.t5{outline:2px dotted #2962ff}
+/* v12 · P6 Silvestre a2 (de site_v9_tap_p6): sin deformar, pies en la base de la caja */
+img.char.fit-base{object-fit:contain;object-position:50% 100%}
+/* v12 · P4 Lucas y P6 Silvestre: capas extra que se alternan al tocar (no captan toques: los recibe el personaje base, que solo se
+   vuelve transparente mientras suena la capa). .esp = espejo horizontal de la imagen (scaleX(-1)); sin escala ni movimiento */
+.clip{pointer-events:none;visibility:hidden;z-index:3}
+.clip.on{visibility:visible}
+.clip>video,.clip>img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:fill;background:transparent;pointer-events:none}
+.clip.esp>video,.clip.esp>img{transform:scaleX(-1)}
+.clip>video::-webkit-media-controls,.clip>video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none}
+#s4 img.char.oculta,#s6 img.char.oculta{opacity:0}
+body.debug .clip{outline:2px dotted #d500f9}
